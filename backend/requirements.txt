@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+sqlalchemy
+psycopg2-binary
+python-multipart
+pillow
+pillow-heif
