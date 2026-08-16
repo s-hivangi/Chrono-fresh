@@ -1,4 +1,4 @@
-# 🥑 Chronofresh — Produce Quality & Shelf-Life Intelligence Platform
+# Chronofresh — Produce Quality & Shelf-Life Intelligence Platform
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18.0-61DAFB.svg?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
@@ -10,17 +10,17 @@
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
-- **🔍 Computer Vision Degradation Inference**: Dual-backbone feature extraction to classify produce freshness (`Fresh`, `Early Ripe`, `Mid Ripe`, `Late Ripe`, `Spoiled`) and calculate continuous remaining shelf-life in days.
-- **⚡ Interactive Glassmorphic Operations Dashboard**: Real-time batch inventory monitoring with theme switching (Light/Dark mode), search filters, and instant status updates.
-- **📈 Shelf-Life Timeline & Audit Trail**: Interactive Recharts visualizations mapping batch degradation over time alongside full capture history.
-- **🚚 DSS Logistics Command Engine**: Automated FIFO (First-In, First-Out) priority ranking and 4°C cold-chain refrigeration triggers to minimize post-harvest food waste.
-- **📦 Multi-Mode Batch Processing**: Flexible single image, multi-angle same produce, and multi-produce batch upload pipelines with auto-image compression.
+- **Computer Vision Degradation Inference**: Dual-backbone feature extraction to classify produce freshness (`Fresh`, `Early Ripe`, `Mid Ripe`, `Late Ripe`, `Spoiled`) and calculate continuous remaining shelf-life in days.
+- **Interactive Glassmorphic Operations Dashboard**: Real-time batch inventory monitoring with theme switching (Light/Dark mode), search filters, and instant status updates.
+- **Shelf-Life Timeline & Audit Trail**: Interactive Recharts visualizations mapping batch degradation over time alongside full capture history.
+- **DSS Logistics Command Engine**: Automated FIFO (First-In, First-Out) priority ranking and 4°C cold-chain refrigeration triggers to minimize post-harvest food waste.
+- **Multi-Mode Batch Processing**: Flexible single image, multi-angle same produce, and multi-produce batch upload pipelines with auto-image compression.
 
 ---
 
-## 🏛 System Architecture
+## System Architecture
 
 The Chronofresh ecosystem seamlessly integrates computer vision models with a resilient backend API and a dynamic glassmorphic user interface:
 
@@ -33,7 +33,7 @@ The Chronofresh ecosystem seamlessly integrates computer vision models with a re
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 Chronofresh/
@@ -82,7 +82,7 @@ Chronofresh/
 
 ---
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 ### Prerequisites
 - **Python**: 3.9 or higher
@@ -130,7 +130,7 @@ npm run dev
 
 ---
 
-## 📡 API Reference Overview
+## API Reference Overview
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
@@ -142,12 +142,12 @@ npm run dev
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to open an issue or submit a pull request for improvements, feature requests, or bug fixes.
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
