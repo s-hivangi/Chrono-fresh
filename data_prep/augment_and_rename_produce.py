@@ -12,8 +12,8 @@ daily-tracked images.
 
 from pathlib import Path
 
-import albumentations as A
-import cv2
+import albumentations as A  # pyright: ignore[reportMissingImports]
+import cv2  # pyright: ignore[reportMissingImports]
 
 
 # Batch configuration.
