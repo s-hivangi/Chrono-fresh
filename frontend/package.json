@@ -7,9 +7,12 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.0.0",
     "@vitejs/plugin-react": "latest",
+    "axios": "^1.7.0",
     "react": "latest",
     "react-dom": "latest",
+    "react-router-dom": "^6.26.0",
     "recharts": "latest",
     "vite": "latest"
   },
