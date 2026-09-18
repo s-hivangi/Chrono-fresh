@@ -1,0 +1,25 @@
+[project]
+name = "chronofresh-backend"
+version = "0.1.0"
+description = "Chrono-Fresh backend API"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "python-multipart",
+    "pillow",
+    "pillow-heif",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "anyio>=4.15.1",
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]

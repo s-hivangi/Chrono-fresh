@@ -6,3 +6,7 @@ psycopg2-binary
 python-multipart
 pillow
 pillow-heif
+httpx
+pytest
+pytest-asyncio
+anyio[trio]

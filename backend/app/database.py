@@ -58,6 +58,7 @@ def ensure_mvp_columns() -> None:
 
     statements = [
         "ALTER TABLE products ADD COLUMN IF NOT EXISTS display_name VARCHAR(100)",
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS outcome VARCHAR(20)",
         "ALTER TABLE image_history ADD COLUMN IF NOT EXISTS thumbnail_path VARCHAR",
         "ALTER TABLE image_history ADD COLUMN IF NOT EXISTS original_filename VARCHAR",
         "ALTER TABLE image_history ADD COLUMN IF NOT EXISTS batch_id VARCHAR(64)",

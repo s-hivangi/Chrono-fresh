@@ -12,7 +12,8 @@ class Product(Base):
     variety = Column(String(100))
     date_added = Column(TIMESTAMP, server_default=func.now())
     storage_type = Column(String(50))                        # room, fridge, container
-    status = Column(String(20), default="active")            # active, spoiled, consumed
+    status = Column(String(20), default="active")            # active, completed
+    outcome = Column(String(20), nullable=True)               # consumed | discarded | None
     display_name = Column(String(100))
 
     images = relationship("ImageHistory", back_populates="product", cascade="all, delete")
