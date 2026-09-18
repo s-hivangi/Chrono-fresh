@@ -47,7 +47,7 @@ Chronofresh/
 │   └── MODEL_HANDOFF.md           # Model Export & Deployment Guidelines
 ├── backend/                       # Computer Vision Backend Service (FastAPI)
 │   ├── .env.example               # Backend Environment Template
-│   ├── requirements.txt           # Python Dependencies
+│   ├── pyproject.toml             # Python Dependencies (uv)
 │   ├── uploads/
 │   │   └── .gitkeep               # Media Uploads Directory Placeholder
 │   └── app/                       # FastAPI Source Code
@@ -85,7 +85,7 @@ Chronofresh/
 ## Quick Start Guide
 
 ### Prerequisites
-- **Python**: 3.9 or higher
+- **Python**: 3.10 or higher
 - **Node.js**: 18.x or higher
 - **npm**: 9.x or higher
 
@@ -97,18 +97,11 @@ Chronofresh/
 # Navigate to backend directory
 cd backend
 
-# Create and activate virtual environment
-python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+# Create the virtual environment and install locked dependencies
+uv sync
 
 # Start FastAPI server
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 > The API server will be available at `http://127.0.0.1:8000` (Swagger docs available at `http://127.0.0.1:8000/docs`).
 
