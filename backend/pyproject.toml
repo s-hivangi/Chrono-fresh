@@ -12,6 +12,7 @@ dependencies = [
     "python-multipart",
     "pillow",
     "pillow-heif",
+    "alembic",
 ]
 
 [tool.uv]

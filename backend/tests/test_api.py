@@ -6,6 +6,19 @@ from __future__ import annotations
 
 import io
 
+from app.main import _issue_analysis_token
+from app.prediction_service import format_days_remaining, run_dss_engine
+
+
+def _token(days: float, stage: str = "Late Ripening") -> str:
+    return _issue_analysis_token({
+        "produce_type": "tomato", "freshness_stage": stage,
+        "days_remaining": days, "days_remaining_display": f"{days:.1f} days",
+        "confidence": 0.91, "advice": "Test advice",
+        "refrigeration_trigger": days <= 1, "fifo_priority": "PRIORITY_1",
+        "action_type": "USE_SOON",
+    })
+
 
 # ── Health & Meta ──────────────────────────────────────────────────────────────
 
@@ -37,15 +50,52 @@ def test_analyze_valid_image(client, single_file, tiny_jpeg):
     assert r.status_code == 200
     data = r.json()
     assert "freshness_stage" in data
-    assert data["freshness_stage"] in ["Fresh", "Early Ripe", "Mid Ripe", "Late Ripe", "Spoiled"]
+    assert data["freshness_stage"] in ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"]
+    assert data["days_remaining_display"] == f"{data['days_remaining']:.1f} days"
+    assert "PRISTINE" not in data["advice"]
+    assert "warehouse" not in data["advice"].lower()
     assert "days_remaining" in data
     assert isinstance(data["confidence"], float)
     assert "advice" in data
+    assert data["analysis_token"]
+
+
+def test_analyze_result_is_exactly_the_saved_initial_prediction(client, tiny_jpeg):
+    analyzed = client.post(
+        "/api/v1/analyze",
+        files=[("file", ("same.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
+        data={"produce_type": "tomato"},
+    ).json()
+    saved = client.post(
+        "/api/v1/produce",
+        files=[("file", ("same.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
+        data={"produce_type": "tomato", "analysis_token": analyzed["analysis_token"]},
+    )
+    assert saved.status_code == 201
+    prediction = client.get(f"/api/v1/produce/{saved.json()['product_id']}/history").json()[0]["prediction"]
+    for field in ("freshness_stage", "days_remaining", "days_remaining_display", "confidence", "advice", "refrigeration_trigger", "fifo_priority", "action_type"):
+        assert prediction[field] == analyzed[field]
 
 
 def test_analyze_no_file(client):
     r = client.post("/api/v1/analyze", data={"produce_type": "tomato"})
     assert r.status_code == 422
+
+
+def test_dss_uses_canonical_stages_and_exact_days():
+    assert format_days_remaining(7.04) == "7.0 days"
+    cases = {
+        "Fresh": "Fresh — 7.0 days remaining.",
+        "Early Ripening": "Ripening — 4.2 days remaining.",
+        "Mid-Ripening": "Ripe — 3.0 days remaining.",
+        "Late Ripening": "Overripe — 0.9 days remaining.",
+        "Spoiled": "Spoiled — this item should be discarded.",
+    }
+    for stage, expected_start in cases.items():
+        advice = run_dss_engine(stage, {"Fresh": 7.0, "Early Ripening": 4.2, "Mid-Ripening": 3.0, "Late Ripening": 0.9, "Spoiled": 0.0}[stage], "tomato")[3]
+        assert advice.startswith(expected_start)
+        assert "PRISTINE" not in advice
+        assert "warehouse" not in advice.lower()
 
 
 def test_analyze_text_file(client):
@@ -71,6 +121,16 @@ def test_create_produce(client, single_file):
     assert data["produce_type"] == "tomato"
     assert data["status"] == "active"
     assert data["outcome"] is None
+
+
+def test_corrupt_image_leaves_no_ghost_product(client):
+    response = client.post(
+        "/api/v1/produce",
+        files=[("file", ("fake.jpg", io.BytesIO(b"not really a jpeg"), "image/jpeg"))],
+        data={"produce_type": "tomato"},
+    )
+    assert response.status_code == 400
+    assert client.get("/api/v1/produce?status=all").json() == []
 
 
 # ── List produce ───────────────────────────────────────────────────────────────
@@ -168,6 +228,7 @@ def test_complete_consumed_removes_from_active(client, tiny_jpeg):
     assert rc.status_code == 200
     assert rc.json()["status"] == "completed"
     assert rc.json()["outcome"] == "consumed"
+    assert rc.json()["completed_at"] is not None
 
     # No longer in active list
     ra = client.get("/api/v1/produce")
@@ -207,6 +268,21 @@ def test_dashboard_aggregates_correctly(client, tiny_jpeg):
     assert isinstance(data["all_active"], list)
 
 
+def test_zero_days_sorts_first_and_use_first_excludes_fresh(client, tiny_jpeg):
+    ids = []
+    for days, stage in ((2.0, "Mid-Ripening"), (0.0, "Spoiled"), (8.0, "Fresh")):
+        response = client.post(
+            "/api/v1/produce",
+            files=[("file", (f"{days}.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
+            data={"produce_type": "tomato", "analysis_token": _token(days, stage)},
+        )
+        ids.append(response.json()["product_id"])
+    listed = client.get("/api/v1/produce?sort=urgency").json()
+    assert [item["latest_days_remaining"] for item in listed] == [0.0, 2.0, 8.0]
+    use_first = client.get("/api/v1/dashboard").json()["use_first"]
+    assert [item["product_id"] for item in use_first] == [ids[1]]
+
+
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
 def test_analytics_counts_update_after_lifecycle(client, tiny_jpeg):
@@ -241,7 +317,7 @@ def test_prediction_stub_produces_valid_output(client, tiny_jpeg):
     assert r.status_code == 200
     d = r.json()
     # Validate all required API fields are present and correctly typed
-    assert d["freshness_stage"] in ["Fresh", "Early Ripe", "Mid Ripe", "Late Ripe", "Spoiled"]
+    assert d["freshness_stage"] in ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"]
     assert isinstance(d["days_remaining"], (int, float))
     assert d["days_remaining"] >= 0
     assert 0.0 <= d["confidence"] <= 1.0

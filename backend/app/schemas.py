@@ -23,6 +23,8 @@ class ProductOut(BaseModel):
     storage_type: Optional[str]
     status: str
     outcome: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     display_name: Optional[str]
     date_added: Optional[datetime]
     latest_stage: Optional[str] = None
@@ -48,6 +50,8 @@ class PredictionOut(BaseModel):
 class ImageHistoryOut(BaseModel):
     image_id: int
     product_id: int
+    produce_type: Optional[str] = None
+    display_name: Optional[str] = None
     image_url: str
     thumbnail_url: Optional[str]
     capture_date: datetime
@@ -101,6 +105,8 @@ class AnalyzeResult(BaseModel):
     refrigeration_trigger: bool
     fifo_priority: str
     action_type: str
+    analysis_token: str
+    analysis_token: str
 
 
 class ProductUpdate(BaseModel):

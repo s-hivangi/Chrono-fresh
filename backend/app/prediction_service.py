@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Tuple
 
 
-STAGES = ["Fresh", "Early Ripe", "Mid Ripe", "Late Ripe", "Spoiled"]
+STAGES = ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"]
+
+
+def format_days_remaining(days_remaining: float) -> str:
+    """Format the model regression consistently everywhere in the API."""
+    return f"{max(0.0, days_remaining):.1f} days"
 
 
 @dataclass(frozen=True)
@@ -22,13 +27,7 @@ class PredictionResult:
 
     @property
     def days_remaining_display(self) -> str:
-        if self.days_remaining <= 0:
-            return "0 days"
-        if self.days_remaining < 1:
-            return "<1 day"
-        lower = max(0, int(self.days_remaining))
-        upper = lower + 1
-        return f"{lower}-{upper} days"
+        return format_days_remaining(self.days_remaining)
 
 
 class StubPredictionService:
@@ -64,50 +63,46 @@ class StubPredictionService:
 
 
 def run_dss_engine(stage: str, days_remaining: float, produce_type: str) -> Tuple[bool, str, str, str]:
-    """
-    Decision Support Engine (DSS):
-    Translates dual-backbone latent predictions into actionable logistics directives.
-    """
-    produce = produce_type.title()
+    """Translate model outputs into consumer-facing guidance."""
+    days = format_days_remaining(days_remaining)
 
     if stage == "Spoiled" or days_remaining <= 0:
         return (
             False,
-            "QUARANTINE_RECYCLE",
-            "QUARANTINE",
-            f"ALERT: {produce} is spoiled. Quarantine batch immediately to prevent ethylene cross-contamination. Route to compost/bio-recycling."
-        )
-    
-    if stage == "Late Ripe" or days_remaining <= 1.5:
-        return (
-            True,
-            "PRIORITY_1_IMMEDIATE",
-            "MARKDOWN_PROCESSING",
-            f"CRITICAL (FIFO Priority 1): {produce} has <=1.5 days shelf life. Trigger cold-storage refrigeration (4°C) and dispatch immediately to local retail or route to purée/juice processing."
+            "DISCARD",
+            "DISCARD",
+            "Spoiled — this item should be discarded.",
         )
 
-    if stage == "Mid Ripe" or days_remaining <= 3.5:
+    if stage == "Late Ripening" or days_remaining <= 1.5:
         return (
             True,
-            "PRIORITY_2_RETAIL",
-            "COLD_STORAGE",
-            f"LOGISTICS NOTICE (FIFO Priority 2): {produce} is mid-ripe with ~{days_remaining:.1f} days left. Activate cold-chain storage (6°C) and prioritize for regional store delivery within 48h."
+            "USE_SOON",
+            "USE_SOON",
+            f"Overripe — {days} remaining. Use soon or it will spoil.",
         )
 
-    if stage == "Early Ripe":
+    if stage == "Mid-Ripening" or days_remaining <= 3.5:
+        return (
+            True,
+            "EAT_NOW",
+            "EAT_NOW",
+            f"Ripe — {days} remaining. Great to eat now.",
+        )
+
+    if stage == "Early Ripening":
         return (
             False,
-            "PRIORITY_3_BUFFER",
+            "ENJOY_SOON",
             "MONITOR",
-            f"OPTIMAL (FIFO Priority 3): {produce} is early ripe ({days_remaining:.1f} days remaining). Suitable for standard ambient/chilled distribution buffer."
+            f"Ripening — {days} remaining. Best enjoyed soon.",
         )
 
-    # Fresh stage
     return (
         False,
-        "STANDARD_BUFFER",
+        "FRESH",
         "MONITOR",
-        f"PRISTINE: {produce} is in fresh stage with {days_remaining:.1f} days remaining shelf life. Standard warehouse handling."
+        f"Fresh — {days} remaining. Store in the fridge to keep it fresh longer.",
     )
 
 

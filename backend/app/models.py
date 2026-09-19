@@ -14,6 +14,7 @@ class Product(Base):
     storage_type = Column(String(50))                        # room, fridge, container
     status = Column(String(20), default="active")            # active, completed
     outcome = Column(String(20), nullable=True)               # consumed | discarded | None
+    completed_at = Column(TIMESTAMP, nullable=True)
     display_name = Column(String(100))
 
     images = relationship("ImageHistory", back_populates="product", cascade="all, delete")

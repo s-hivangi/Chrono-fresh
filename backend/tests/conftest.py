@@ -13,9 +13,13 @@ from PIL import Image
 from sqlalchemy import create_engine, StaticPool
 from sqlalchemy.orm import sessionmaker
 
-os.environ.setdefault("DATABASE_URL", "")
+os.environ["CHRONOFRESH_TESTING"] = "true"
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("USE_REAL_MODEL", "false")
-os.environ.setdefault("CORS_ORIGINS", "http://localhost:5173")
+os.environ.setdefault(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
+)
 
 import app.database as _db_module  # noqa: E402
 from app.database import Base, get_db  # noqa: E402

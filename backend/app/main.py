@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import os
+import base64
+import hashlib
+import hmac
+import json
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Optional
@@ -12,8 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session, selectinload
 
 from . import models  # noqa: F401 -- needed so tables are registered on Base
-from .database import Base, engine, ensure_mvp_columns, get_db
-from .image_utils import SUPPORTED_CONTENT_TYPES, save_upload_image
+from .database import get_db
+from .image_utils import read_validated_image, save_normalized_image, save_upload_image
 from .models import ImageHistory, Prediction, Product
 from .prediction_service import ModelInferenceEngine
 from .schemas import (
@@ -37,24 +42,26 @@ from .schemas import (
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-UPLOAD_DIR = BASE_DIR / "uploads"
+_upload_setting = Path(os.getenv("UPLOAD_DIRECTORY", "uploads"))
+UPLOAD_DIR = _upload_setting if _upload_setting.is_absolute() else BASE_DIR / _upload_setting
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Chrono-Fresh API", version="1.0.0")
-_cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+_cors_origins_raw = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
+)
 _cors_origins = [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins or ["*"],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-# Creates tables in Postgres/SQLite if they don't already exist.
-Base.metadata.create_all(bind=engine)
-ensure_mvp_columns()
 prediction_service = ModelInferenceEngine()
 
 
@@ -177,7 +184,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         out = product_to_out(p)
         if out.latest_stage == "Fresh":
             fresh_count += 1
-        elif out.latest_stage in {"Late Ripe", "Spoiled"} or (out.latest_days_remaining is not None and out.latest_days_remaining <= 1.5):
+        elif out.latest_stage in {"Late Ripening", "Spoiled"} or (out.latest_days_remaining is not None and out.latest_days_remaining <= 1.5):
             high_risk_count += 1
         if out.latest_stage == "Spoiled":
             spoiled_count += 1
@@ -358,6 +365,7 @@ def product_to_out(product: Product) -> ProductOut:
         storage_type=product.storage_type,
         status=product.status,
         outcome=product.outcome,
+        completed_at=product.completed_at,
         display_name=product.display_name or f"{product.produce_type.title()} #{product.product_id:03d}",
         date_added=product.date_added,
         latest_stage=latest_prediction.freshness_stage if latest_prediction else None,
@@ -371,6 +379,8 @@ def image_to_out(image: ImageHistory) -> ImageHistoryOut:
     return ImageHistoryOut(
         image_id=image.image_id,
         product_id=image.product_id,
+        produce_type=image.product.produce_type if image.product else None,
+        display_name=image.product.display_name if image.product else None,
         image_url=path_to_url(image.image_path),
         thumbnail_url=path_to_url(image.thumbnail_path),
         capture_date=image.capture_date,
@@ -411,14 +421,60 @@ def path_to_url(path: Optional[str]) -> Optional[str]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _PRODUCE_TYPES = ["tomato", "banana", "guava", "apple", "mango"]
-_FRESHNESS_STAGES = ["Fresh", "Early Ripe", "Mid Ripe", "Late Ripe", "Spoiled"]
+_FRESHNESS_STAGES = ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"]
 _STORAGE_OPTIONS = ["room", "fridge", "container"]
 _MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+_ANALYSIS_SECRET = os.getenv("ANALYSIS_TOKEN_SECRET", "chronofresh-local-development-secret").encode()
+
+
+def _urgency_key(product: ProductOut) -> tuple[bool, float]:
+    days = product.latest_days_remaining
+    return (days is None, days if days is not None else 999.0)
+
+
+def _prediction_payload(result, produce_type: str) -> dict:
+    return {
+        "produce_type": produce_type,
+        "freshness_stage": result.freshness_stage,
+        "days_remaining": result.days_remaining,
+        "days_remaining_display": result.days_remaining_display,
+        "confidence": result.confidence,
+        "advice": result.advice,
+        "refrigeration_trigger": result.refrigeration_trigger,
+        "fifo_priority": result.fifo_priority,
+        "action_type": result.action_type,
+    }
+
+
+def _issue_analysis_token(payload: dict) -> str:
+    data = {**payload, "expires_at": int(time.time()) + 3600}
+    body = base64.urlsafe_b64encode(
+        json.dumps(data, separators=(",", ":"), sort_keys=True).encode()
+    ).decode().rstrip("=")
+    signature = hmac.new(_ANALYSIS_SECRET, body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{signature}"
+
+
+def _read_analysis_token(token: str, produce_type: str) -> dict:
+    try:
+        body, signature = token.rsplit(".", 1)
+        expected = hmac.new(_ANALYSIS_SECRET, body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            raise ValueError("signature")
+        padded = body + "=" * (-len(body) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded).decode())
+        if payload["expires_at"] < int(time.time()):
+            raise ValueError("expired")
+        if payload["produce_type"] != produce_type:
+            raise ValueError("produce type")
+        return payload
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Analysis token is invalid or expired. Analyze the image again.") from exc
 
 
 def _is_use_soon(p: ProductOut) -> bool:
     return (
-        p.latest_stage in {"Late Ripe", "Spoiled"}
+        p.latest_stage in {"Late Ripening", "Spoiled"}
         or (p.latest_days_remaining is not None and p.latest_days_remaining <= 1.5)
     )
 
@@ -450,27 +506,13 @@ async def v1_analyze(
     produce_type: Annotated[str, Form()],
 ):
     """Analyze a produce image and return freshness prediction without saving anything."""
-    if file.content_type not in SUPPORTED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported image type: {file.content_type}. Accepted: JPEG, PNG, WEBP, HEIC.")
-    raw = await file.read()
-    if len(raw) > _MAX_UPLOAD_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {_MAX_UPLOAD_MB} MB.")
-    suffix = Path(file.filename or "upload").suffix.lower()
-    temp_path = UPLOAD_DIR / f"tmp_{uuid4().hex}{suffix or '.jpg'}"
+    ptype = produce_type.strip().lower()
+    normalized = await read_validated_image(file, _MAX_UPLOAD_MB)
+    temp_path = UPLOAD_DIR / f"analysis_{uuid4().hex}.jpg"
     try:
-        temp_path.write_bytes(raw)
-        result = prediction_service.predict(temp_path, produce_type.strip().lower())
-        return AnalyzeResult(
-            produce_type=produce_type.strip().lower(),
-            freshness_stage=result.freshness_stage,
-            days_remaining=result.days_remaining,
-            days_remaining_display=result.days_remaining_display,
-            confidence=result.confidence,
-            advice=result.advice,
-            refrigeration_trigger=result.refrigeration_trigger,
-            fifo_priority=result.fifo_priority,
-            action_type=result.action_type,
-        )
+        temp_path.write_bytes(normalized)
+        payload = _prediction_payload(prediction_service.predict(temp_path, ptype), ptype)
+        return AnalyzeResult(**payload, analysis_token=_issue_analysis_token(payload))
     except HTTPException:
         raise
     except Exception as exc:
@@ -487,58 +529,68 @@ async def v1_create_produce(
     produce_type: Annotated[str, Form()],
     storage_type: Annotated[Optional[str], Form()] = "room",
     display_name: Annotated[Optional[str], Form()] = None,
+    analysis_token: Annotated[Optional[str], Form()] = None,
     db: Session = Depends(get_db),
 ):
     """Save a produce item with its first scan and prediction."""
     ptype = produce_type.strip().lower()
-    product = Product(
-        produce_type=ptype,
-        storage_type=storage_type or "room",
-        display_name=display_name or f"{produce_type.strip().title()} #{uuid4().hex[:4].upper()}",
-        status="active",
-    )
-    db.add(product)
-    db.flush()
-
-    image_row = ImageHistory(
-        product_id=product.product_id,
-        image_path="pending",
-        capture_date=datetime.utcnow(),
-        original_filename=file.filename,
-        batch_id=uuid4().hex,
-        batch_mode="single",
-        processing_status="PENDING",
-    )
-    db.add(image_row)
-    db.flush()
-
+    normalized = await read_validated_image(file, _MAX_UPLOAD_MB)
+    image_path: Optional[Path] = None
+    thumbnail_path: Optional[Path] = None
     try:
-        image_path, thumbnail_path = await save_upload_image(file, UPLOAD_DIR)
-        image_row.image_path = str(image_path)
-        image_row.thumbnail_path = str(thumbnail_path)
-        result = prediction_service.predict(image_path, ptype)
+        image_path, thumbnail_path = save_normalized_image(normalized, UPLOAD_DIR)
+        payload = (
+            _read_analysis_token(analysis_token, ptype)
+            if analysis_token
+            else _prediction_payload(prediction_service.predict(image_path, ptype), ptype)
+        )
+        product = Product(
+            produce_type=ptype,
+            storage_type=storage_type or "room",
+            display_name=display_name or f"{produce_type.strip().title()} #{uuid4().hex[:4].upper()}",
+            status="active",
+        )
+        db.add(product)
+        db.flush()
+        image_row = ImageHistory(
+            product_id=product.product_id,
+            image_path=str(image_path),
+            thumbnail_path=str(thumbnail_path),
+            capture_date=datetime.utcnow(),
+            original_filename=file.filename,
+            batch_id=uuid4().hex,
+            batch_mode="single",
+            processing_status="SUCCESS",
+        )
+        db.add(image_row)
+        db.flush()
         pred = Prediction(
             image_id=image_row.image_id,
-            freshness_stage=result.freshness_stage,
-            days_remaining=result.days_remaining,
-            days_remaining_display=result.days_remaining_display,
-            confidence=result.confidence,
-            advice=result.advice,
-            refrigeration_trigger=result.refrigeration_trigger,
-            fifo_priority=result.fifo_priority,
-            action_type=result.action_type,
+            freshness_stage=payload["freshness_stage"],
+            days_remaining=payload["days_remaining"],
+            days_remaining_display=payload["days_remaining_display"],
+            confidence=payload["confidence"],
+            advice=payload["advice"],
+            refrigeration_trigger=payload["refrigeration_trigger"],
+            fifo_priority=payload["fifo_priority"],
+            action_type=payload["action_type"],
         )
-        image_row.processing_status = "SUCCESS"
         db.add(pred)
         db.commit()
         db.refresh(product)
     except HTTPException:
-        image_row.processing_status = "FAILED"
-        db.commit()
+        db.rollback()
+        if image_path:
+            image_path.unlink(missing_ok=True)
+        if thumbnail_path:
+            thumbnail_path.unlink(missing_ok=True)
         raise
     except Exception as exc:
-        image_row.processing_status = "FAILED"
-        db.commit()
+        db.rollback()
+        if image_path:
+            image_path.unlink(missing_ok=True)
+        if thumbnail_path:
+            thumbnail_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Could not save produce item.") from exc
 
     return product_to_out(product)
@@ -573,7 +625,7 @@ def v1_list_produce(
         items = [p for p in items if q in (p.display_name or "").lower() or q in p.produce_type.lower()]
 
     if sort == "urgency":
-        items.sort(key=lambda p: (p.latest_days_remaining is None, p.latest_days_remaining or 999))
+        items.sort(key=_urgency_key)
     else:
         items.sort(key=lambda p: p.date_added or datetime.min, reverse=True)
 
@@ -611,23 +663,23 @@ async def v1_rescan_produce(
 ):
     """Upload a new image for an existing produce item. Adds a new scan without replacing history."""
     product = load_product(db, product_id)
-
-    image_row = ImageHistory(
-        product_id=product.product_id,
-        image_path="pending",
-        capture_date=datetime.utcnow(),
-        original_filename=file.filename,
-        batch_id=uuid4().hex,
-        batch_mode="single",
-        processing_status="PENDING",
-    )
-    db.add(image_row)
-    db.flush()
-
+    normalized = await read_validated_image(file, _MAX_UPLOAD_MB)
+    image_path: Optional[Path] = None
+    thumbnail_path: Optional[Path] = None
     try:
-        image_path, thumbnail_path = await save_upload_image(file, UPLOAD_DIR)
-        image_row.image_path = str(image_path)
-        image_row.thumbnail_path = str(thumbnail_path)
+        image_path, thumbnail_path = save_normalized_image(normalized, UPLOAD_DIR)
+        image_row = ImageHistory(
+            product_id=product.product_id,
+            image_path=str(image_path),
+            thumbnail_path=str(thumbnail_path),
+            capture_date=datetime.utcnow(),
+            original_filename=file.filename,
+            batch_id=uuid4().hex,
+            batch_mode="single",
+            processing_status="SUCCESS",
+        )
+        db.add(image_row)
+        db.flush()
         result = prediction_service.predict(image_path, product.produce_type)
         pred = Prediction(
             image_id=image_row.image_id,
@@ -640,17 +692,22 @@ async def v1_rescan_produce(
             fifo_priority=result.fifo_priority,
             action_type=result.action_type,
         )
-        image_row.processing_status = "SUCCESS"
         db.add(pred)
         db.commit()
         db.refresh(product)
     except HTTPException:
-        image_row.processing_status = "FAILED"
-        db.commit()
+        db.rollback()
+        if image_path:
+            image_path.unlink(missing_ok=True)
+        if thumbnail_path:
+            thumbnail_path.unlink(missing_ok=True)
         raise
     except Exception as exc:
-        image_row.processing_status = "FAILED"
-        db.commit()
+        db.rollback()
+        if image_path:
+            image_path.unlink(missing_ok=True)
+        if thumbnail_path:
+            thumbnail_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail="Rescan failed.") from exc
 
     return product_to_out(product)
@@ -712,6 +769,7 @@ def v1_complete_produce(product_id: int, payload: CompleteRequest, db: Session =
         raise HTTPException(status_code=409, detail="This produce item is already completed.")
     product.status = "completed"
     product.outcome = payload.outcome
+    product.completed_at = datetime.utcnow()
     db.commit()
     db.refresh(product)
     return product_to_out(product)
@@ -728,7 +786,7 @@ def v1_dashboard(db: Session = Depends(get_db)):
         .all()
     )
     active = [product_to_out(p) for p in all_products if p.status != "completed"]
-    active.sort(key=lambda p: (p.latest_days_remaining is None, p.latest_days_remaining or 999))
+    active.sort(key=_urgency_key)
 
     use_soon = [p for p in active if _is_use_soon(p)]
     fresh = [p for p in active if p.latest_stage == "Fresh"]
@@ -752,7 +810,7 @@ def v1_dashboard(db: Session = Depends(get_db)):
             fresh_count=len(fresh),
             spoiled_count=len(spoiled),
         ),
-        use_first=active[:5],
+        use_first=use_soon[:5],
         recent_scans=[image_to_out(img) for img in recent_images],
         all_active=active,
     )
