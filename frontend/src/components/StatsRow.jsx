@@ -8,7 +8,7 @@ export default function StatsRow({ stats }) {
         <div className="stat-value">{stats.total_products ?? 0}</div>
       </div>
       <div className="stat-card">
-        <div className="stat-label">Pristine Fresh</div>
+        <div className="stat-label">Fresh</div>
         <div className="stat-value">{stats.fresh_count ?? 0}</div>
       </div>
       <div className="stat-card urgent">

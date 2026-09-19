@@ -1,6 +1,6 @@
 export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 export const PRODUCE_TYPES = ["guava", "banana", "tomato", "apple", "mango"];
-export const STAGES = ["Fresh", "Early Ripe", "Mid Ripe", "Late Ripe", "Spoiled"];
+export const STAGES = ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"];
 
 export function cap(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
@@ -9,7 +9,7 @@ export function cap(s) {
 export function isUrgent(p) {
   return p && (
     p.latest_stage === "Spoiled" ||
-    p.latest_stage === "Late Ripe" ||
+    p.latest_stage === "Late Ripening" ||
     (p.latest_days_remaining != null && p.latest_days_remaining <= 1.5)
   );
 }
