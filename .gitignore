@@ -17,11 +17,15 @@ ENV/
 # Uploads & Temporary Media
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/.env
 
 # Node & Frontend Build
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+app/node_modules/
+app/.expo/
+app/dist-android/
 npm-debug.log*
 
 # IDEs & System
