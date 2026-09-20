@@ -9,6 +9,7 @@ import { Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRescanMutation } from '../../src/api/produce';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../../src/theme';
+import OutlineIcon from '../../src/components/OutlineIcon';
 
 export default function RescanScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -55,7 +56,8 @@ export default function RescanScreen() {
 
       <View style={styles.pickRow}>
         <TouchableOpacity style={styles.pickBtn} onPress={pickImage}>
-          <Text style={styles.pickBtnText}>📷 Take / Choose Photo</Text>
+          <OutlineIcon name="scan" color={COLORS.green} size={20} />
+          <Text style={styles.pickBtnText}>Take / Choose Photo</Text>
         </TouchableOpacity>
       </View>
 

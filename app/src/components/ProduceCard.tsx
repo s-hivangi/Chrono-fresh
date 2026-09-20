@@ -2,9 +2,10 @@ import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../theme';
 import { StageBadge } from './StageBadge';
-import { isUrgent, cap } from '../utils/helpers';
+import { isUrgent, cap, formatDays } from '../utils/helpers';
 import { API_BASE_URL } from '../api/client';
 import type { ProductOut } from '../types/api';
+import OutlineIcon from './OutlineIcon';
 
 interface ProduceCardProps {
   produce: ProductOut;
@@ -26,7 +27,7 @@ export default function ProduceCard({ produce, onPress }: ProduceCardProps) {
         />
       ) : (
         <View style={styles.thumbPlaceholder}>
-          <Text style={{ fontSize: 28 }}>🥦</Text>
+          <OutlineIcon name="produce" color={COLORS.muted} size={28} />
         </View>
       )}
       <View style={styles.info}>
@@ -34,7 +35,7 @@ export default function ProduceCard({ produce, onPress }: ProduceCardProps) {
         <Text style={styles.type}>{cap(produce.produce_type)}</Text>
         <View style={styles.row}>
           <StageBadge stage={produce.latest_stage} />
-          <Text style={styles.days}>{produce.latest_days_display ?? '—'}</Text>
+          <Text style={styles.days}>{formatDays(produce.latest_days_remaining)}</Text>
         </View>
       </View>
       {urgent && <View style={styles.urgentDot} />}
