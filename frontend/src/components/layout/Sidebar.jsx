@@ -1,19 +1,20 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import OutlineIcon from '../shared/OutlineIcon.jsx';
 
 const NAV = [
-  { to: '/',          label: 'Dashboard',  icon: '⬡' },
-  { to: '/produce',   label: 'My Produce', icon: '🥦' },
-  { to: '/scan',      label: 'Scan',       icon: '📷' },
-  { to: '/history',   label: 'History',    icon: '📋' },
-  { to: '/analytics', label: 'Analytics',  icon: '📊' },
+  { to: '/',          label: 'Dashboard',  icon: 'home' },
+  { to: '/produce',   label: 'Your Stash', icon: 'produce' },
+  { to: '/scan',      label: 'Scan',       icon: 'camera' },
+  { to: '/history',   label: 'History',    icon: 'history' },
+  { to: '/analytics', label: 'Analytics',  icon: 'analytics' },
 ];
 
 export default function Sidebar() {
   return (
     <nav className="sidebar">
       <div className="sidebar-brand">
-        <span className="brand-icon">⏱</span>
+        <span className="brand-icon"><OutlineIcon name="history" size={22} /></span>
         <span className="brand-name">ChronoFresh</span>
       </div>
       <ul className="sidebar-nav">
@@ -26,7 +27,7 @@ export default function Sidebar() {
                 `sidebar-link${isActive ? ' sidebar-link--active' : ''}`
               }
             >
-              <span className="sidebar-icon">{icon}</span>
+              <span className="sidebar-icon"><OutlineIcon name={icon} size={19} /></span>
               <span>{label}</span>
             </NavLink>
           </li>

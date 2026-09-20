@@ -198,7 +198,7 @@ export default function ScanPage() {
                     disabled={isSaving}
                     style={{ flex: 1 }}
                   >
-                    {isSaving ? 'Saving…' : 'Add to My Produce'}
+                    {isSaving ? 'Saving…' : 'Add to Your Stash'}
                   </button>
                   <button
                     className="seg-btn"
@@ -211,7 +211,7 @@ export default function ScanPage() {
                 {saveError && <div className="error-msg">{saveError}</div>}
 
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5 }}>
-                  ⚠ This is an AI estimate from visual appearance and does not replace normal food-safety checks.
+                  This is an AI estimate from visual appearance and does not replace normal food-safety checks.
                 </p>
               </div>
             </div>

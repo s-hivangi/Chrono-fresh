@@ -6,6 +6,7 @@ import StageBadge from '../components/produce/StageBadge.jsx';
 import LoadingSpinner from '../components/shared/LoadingSpinner.jsx';
 import ErrorState from '../components/shared/ErrorState.jsx';
 import EmptyState from '../components/shared/EmptyState.jsx';
+import OutlineIcon from '../components/shared/OutlineIcon.jsx';
 
 export default function HistoryPage() {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ export default function HistoryPage() {
                       />
                     ) : (
                       <div style={{ width: 40, height: 40, borderRadius: 6, background: 'var(--surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                        🥦
+                        <OutlineIcon name="produce" size={20} />
                       </div>
                     )}
                   </td>

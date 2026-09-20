@@ -8,6 +8,7 @@ import StatsCard from '../components/shared/StatsCard.jsx';
 import LoadingSpinner from '../components/shared/LoadingSpinner.jsx';
 import ErrorState from '../components/shared/ErrorState.jsx';
 import EmptyState from '../components/shared/EmptyState.jsx';
+import OutlineIcon from '../components/shared/OutlineIcon.jsx';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -43,7 +44,7 @@ export default function DashboardPage() {
       {use_first.length > 0 && (
         <div className="panel" style={{ marginBottom: 20 }}>
           <div className="panel-header">
-            <span className="panel-title">⚡ Use First</span>
+            <span className="panel-title"><OutlineIcon name="warning" size={16} /> Use First</span>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               Sorted by urgency
             </span>

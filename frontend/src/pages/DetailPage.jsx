@@ -14,6 +14,7 @@ import { cap, compressImage, stageBadgeClass, stageStepClass, STAGES } from '../
 import StageBadge from '../components/produce/StageBadge.jsx';
 import LoadingSpinner from '../components/shared/LoadingSpinner.jsx';
 import ErrorState from '../components/shared/ErrorState.jsx';
+import OutlineIcon from '../components/shared/OutlineIcon.jsx';
 
 export default function DetailPage() {
   const { id } = useParams();
@@ -98,7 +99,7 @@ export default function DetailPage() {
                 />
               ) : (
                 <div style={{ width: 120, height: 120, borderRadius: 10, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>
-                  🥦
+                  <OutlineIcon name="produce" size={42} />
                 </div>
               )}
             </div>
@@ -226,7 +227,7 @@ export default function DetailPage() {
                 onClick={() => rescanInputRef.current?.click()}
                 disabled={rescanMutation.isPending}
               >
-                {rescanMutation.isPending ? 'Scanning…' : '📷 Upload Rescan Image'}
+                {rescanMutation.isPending ? 'Scanning…' : <><OutlineIcon name="camera" size={16} /> Upload Rescan Image</>}
               </button>
               <input
                 ref={rescanInputRef}
@@ -254,7 +255,7 @@ export default function DetailPage() {
                   disabled={completeMutation.isPending}
                   style={{ flex: 1 }}
                 >
-                  ✅ Mark Used / Consumed
+                  <><OutlineIcon name="check" size={16} /> Mark Used / Consumed</>
                 </button>
                 <button
                   className="seg-btn"
@@ -262,7 +263,7 @@ export default function DetailPage() {
                   disabled={completeMutation.isPending}
                   style={{ flex: 1, color: 'var(--rose-mid)' }}
                 >
-                  🗑 Mark Discarded
+                  <><OutlineIcon name="trash" size={16} /> Mark Discarded</>
                 </button>
               </div>
               {completeError && <div className="error-msg">{completeError}</div>}
