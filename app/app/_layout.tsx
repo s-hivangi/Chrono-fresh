@@ -5,6 +5,20 @@ import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import 'react-native-reanimated';
 import { ScanSessionProvider } from '../src/context/ScanSessionContext';
+import { AuthProvider } from '../src/context/AuthContext';
+import { ThemeProvider } from '../src/context/ThemeContext';
+import { Text } from 'react-native';
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
+
+(Text as typeof Text & { defaultProps?: { style?: unknown } }).defaultProps = {
+  ...((Text as typeof Text & { defaultProps?: { style?: unknown } }).defaultProps ?? {}),
+  style: { fontFamily: 'Poppins_400Regular' },
+};
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -12,7 +26,8 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  initialRouteName: '(tabs)',
+  // Splash is the true entry point; it replaces itself with welcome automatically
+  initialRouteName: 'splash',
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -25,6 +40,10 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
@@ -35,14 +54,67 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ScanSessionProvider><Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="scan/review" options={{ title: 'Review Scan', headerStyle: { backgroundColor: '#F4F8F0' }, headerTintColor: '#469110' }} />
-        <Stack.Screen name="scan/result" options={{ title: 'Result', headerStyle: { backgroundColor: '#F4F8F0' }, headerTintColor: '#469110' }} />
-        <Stack.Screen name="detail/[id]" options={{ title: 'Produce Detail', headerStyle: { backgroundColor: '#F4F8F0' }, headerTintColor: '#469110' }} />
-        <Stack.Screen name="rescan/[id]" options={{ title: 'Rescan', headerStyle: { backgroundColor: '#F4F8F0' }, headerTintColor: '#469110' }} />
-        <Stack.Screen name="settings" options={{ title: 'Settings', headerStyle: { backgroundColor: '#F4F8F0' }, headerTintColor: '#469110' }} />
-      </Stack></ScanSessionProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ScanSessionProvider>
+            <Stack>
+            {/* Cinematic splash — no header, replaces itself with welcome */}
+            <Stack.Screen name="splash" options={{ headerShown: false }} />
+
+            {/* Onboarding flow — no header on these screens */}
+            <Stack.Screen name="welcome" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="login"
+              options={{
+                headerShown: false,
+                presentation: 'card',
+              }}
+            />
+
+            {/* Main app tabs — no header (tabs manage their own) */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+            {/* Detail & action stack screens */}
+            <Stack.Screen
+              name="detail/[id]"
+              options={{
+                title: 'Produce Detail',
+                headerStyle: { backgroundColor: '#F4F8F0' },
+                headerTintColor: '#469110',
+                headerTitleStyle: { fontFamily: 'Poppins_600SemiBold' },
+              }}
+            />
+            <Stack.Screen
+              name="scan/review"
+              options={{
+                title: 'Review Photo',
+                headerStyle: { backgroundColor: '#F4F8F0' },
+                headerTintColor: '#469110',
+                headerTitleStyle: { fontFamily: 'Poppins_600SemiBold' },
+              }}
+            />
+            <Stack.Screen
+              name="scan/result"
+              options={{
+                title: 'Scan Result',
+                headerStyle: { backgroundColor: '#F4F8F0' },
+                headerTintColor: '#469110',
+                headerTitleStyle: { fontFamily: 'Poppins_600SemiBold' },
+              }}
+            />
+            <Stack.Screen
+              name="rescan/[id]"
+              options={{
+                title: 'Rescan',
+                headerStyle: { backgroundColor: '#F4F8F0' },
+                headerTintColor: '#469110',
+                headerTitleStyle: { fontFamily: 'Poppins_600SemiBold' },
+              }}
+            />
+          </Stack>
+          </ScanSessionProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
