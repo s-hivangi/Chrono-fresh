@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App.jsx';
 import './styles.css';
 
-document.documentElement.setAttribute('data-theme', 'dark');
+document.documentElement.setAttribute(
+  'data-theme',
+  localStorage.getItem('chronofresh-theme') === 'light' ? 'light' : 'dark',
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
