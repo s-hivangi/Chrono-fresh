@@ -177,7 +177,7 @@ export default function DetailPage() {
                     contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)' }}
                     labelFormatter={(v) => new Date(v).toLocaleString()}
                   />
-                  <Line type="monotone" dataKey="days_remaining" stroke="var(--green-mid)" strokeWidth={2.5} dot={{ r: 5, fill: 'var(--green-deep)', strokeWidth: 0 }} activeDot={{ r: 7, fill: 'var(--rose-mid)' }} />
+                  <Line type="monotone" dataKey="days_remaining" stroke="var(--s-fresh)" strokeWidth={2.5} dot={{ r: 5, fill: 'var(--green-dark)', strokeWidth: 0 }} activeDot={{ r: 7, fill: 'var(--s-late)' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -240,7 +240,7 @@ export default function DetailPage() {
                 }}
               />
               {rescanMutation.isSuccess && (
-                <span style={{ marginLeft: 12, color: 'var(--green-mid)', fontSize: 13 }}>✓ Rescan saved</span>
+                <span style={{ marginLeft: 12, color: 'var(--action)', fontSize: 13 }}>✓ Rescan saved</span>
               )}
               {rescanError && <div className="error-msg">{rescanError}</div>}
             </div>
@@ -261,7 +261,7 @@ export default function DetailPage() {
                   className="seg-btn"
                   onClick={() => completeMutation.mutate('discarded')}
                   disabled={completeMutation.isPending}
-                  style={{ flex: 1, color: 'var(--rose-mid)' }}
+                  style={{ flex: 1, color: 'var(--s-spoiled)' }}
                 >
                   <><OutlineIcon name="trash" size={16} /> Mark Discarded</>
                 </button>
