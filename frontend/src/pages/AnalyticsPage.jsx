@@ -148,7 +148,7 @@ export default function AnalyticsPage() {
                   contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)' }}
                   labelFormatter={(v) => new Date(v).toLocaleDateString()}
                 />
-                <Line type="monotone" dataKey="count" stroke="var(--green-mid)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--green-deep)', strokeWidth: 0 }} activeDot={{ r: 6, fill: 'var(--rose-mid)' }} />
+                <Line type="monotone" dataKey="count" stroke="var(--s-fresh)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--green-dark)', strokeWidth: 0 }} activeDot={{ r: 6, fill: 'var(--s-late)' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
