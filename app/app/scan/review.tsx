@@ -30,7 +30,7 @@ export default function ReviewScreen() {
   return <ScrollView style={styles.page} contentContainerStyle={styles.content}>
     <Image source={{ uri: session.imageUri }} style={styles.image} resizeMode="cover" />
     <Text style={styles.label}>Produce type</Text>
-    <View style={styles.choices}>{(meta.data?.produce_types ?? ['tomato', 'banana', 'guava', 'apple', 'mango']).map((type) => <TouchableOpacity key={type} onPress={() => session.setProduceType(type)} style={[styles.choice, session.produceType === type && styles.selected]}><Text style={session.produceType === type ? styles.selectedText : styles.choiceText}>{type}</Text></TouchableOpacity>)}</View>
+    <View style={styles.choices}>{(meta.data?.produce_types ?? ['banana', 'guava']).map((type) => <TouchableOpacity key={type} onPress={() => session.setProduceType(type)} style={[styles.choice, session.produceType === type && styles.selected]}><Text style={session.produceType === type ? styles.selectedText : styles.choiceText}>{type}</Text></TouchableOpacity>)}</View>
     <Text style={styles.label}>Storage</Text>
     <View style={styles.choices}>{(meta.data?.storage_options ?? ['room', 'fridge', 'container']).map((type) => <TouchableOpacity key={type} onPress={() => session.setStorageType(type)} style={[styles.choice, session.storageType === type && styles.selected]}><Text style={session.storageType === type ? styles.selectedText : styles.choiceText}>{type}</Text></TouchableOpacity>)}</View>
     <TouchableOpacity style={styles.primary} onPress={runAnalysis} disabled={analyze.isPending}>{analyze.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Analyze</Text>}</TouchableOpacity>

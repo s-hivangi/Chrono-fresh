@@ -4,11 +4,8 @@ const STORAGE_KEY = '@chrono_fresh_scan_id_counters';
 
 /** Maps produce type to its single uppercase initial. */
 const PRODUCE_INITIAL: Record<string, string> = {
-  tomato:  'T',
   banana:  'B',
   guava:   'G',
-  apple:   'A',
-  mango:   'M',
 };
 
 function getInitial(produceType: string): string {
@@ -24,7 +21,7 @@ function pad2(n: number): string {
  * Generates a date-based scan ID like "T-2009-01".
  * Reads and increments a per-day counter from AsyncStorage.
  *
- * @param produceType - e.g. "tomato"
+ * @param produceType - e.g. "banana"
  * @param date        - the scan date (defaults to now)
  * @returns e.g. "T-2009-01"
  */
@@ -60,7 +57,7 @@ export async function generateScanId(
  * Falls back gracefully when date_added is unavailable.
  *
  * @param productId   - numeric product_id from backend
- * @param produceType - e.g. "tomato"
+ * @param produceType - e.g. "banana"
  * @param dateAdded   - ISO date string from backend (e.g. "2026-09-20T...")
  */
 export function deriveScanId(

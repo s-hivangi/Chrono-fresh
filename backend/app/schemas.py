@@ -24,7 +24,6 @@ class ProductOut(BaseModel):
     status: str
     outcome: Optional[str] = None
     completed_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
     display_name: Optional[str]
     date_added: Optional[datetime]
     latest_stage: Optional[str] = None
@@ -39,11 +38,17 @@ class PredictionOut(BaseModel):
     freshness_stage: str
     days_remaining: float
     days_remaining_display: str
-    confidence: float
+    confidence: Optional[float] = None
+    raw_model_confidence: Optional[float] = None
     advice: str
     refrigeration_trigger: bool = False
     fifo_priority: str = "STANDARD"
     action_type: str = "MONITOR"
+    analysis_status: str = "reliable"
+    prediction_source: str = "legacy"
+    model_version: Optional[str] = None
+    verification_status: str = "not_requested"
+    model_class: Optional[str] = None
     predicted_at: Optional[datetime]
 
 
@@ -97,16 +102,22 @@ class DashboardStats(BaseModel):
 class AnalyzeResult(BaseModel):
     """Result of image analysis without creating a saved produce item."""
     produce_type: str
-    freshness_stage: str
-    days_remaining: float
-    days_remaining_display: str
-    confidence: float
+    freshness_stage: Optional[str] = None
+    days_remaining: Optional[float] = None
+    days_remaining_display: Optional[str] = None
+    confidence: Optional[float] = None
+    raw_model_confidence: Optional[float] = None
     advice: str
     refrigeration_trigger: bool
     fifo_priority: str
     action_type: str
     analysis_token: str
-    analysis_token: str
+    analysis_status: str
+    prediction_source: str
+    model_version: str
+    verification_status: str
+    uncertainty_reason: Optional[str] = None
+    model_class: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):
@@ -126,6 +137,9 @@ class MetaOut(BaseModel):
     freshness_stages: List[str]
     storage_options: List[str]
     use_real_model: bool
+    prediction_provider: str
+    model_version: str
+    confidence_label: str = "Raw model confidence (not calibrated accuracy)"
 
 
 class DashboardV1Stats(BaseModel):

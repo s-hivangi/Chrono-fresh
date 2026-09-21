@@ -63,9 +63,6 @@ export function getRecommendation(
 
   // Storage tips per produce type
   function storageTip(): string {
-    if (type === 'tomato') {
-      return 'Room temperature is fine while it is still firm, but move it to the fridge once it starts turning to slow things down.';
-    }
     if (type === 'banana') {
       return 'Keep it away from other fruit if you can — bananas release ethylene gas that speeds up ripening in everything nearby.';
     }

@@ -2,7 +2,7 @@
 name = "chronofresh-backend"
 version = "0.1.0"
 description = "Chrono-Fresh backend API"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
@@ -13,6 +13,9 @@ dependencies = [
     "pillow",
     "pillow-heif",
     "alembic",
+    "keras==3.15.0",
+    "tensorflow-cpu>=2.20,<2.22",
+    "numpy>=1.26",
 ]
 
 [tool.uv]

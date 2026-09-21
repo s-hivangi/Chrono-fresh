@@ -6,7 +6,8 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import date, datetime, timedelta
+from contextlib import asynccontextmanager
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated, Optional
 from uuid import uuid4
@@ -20,7 +21,7 @@ from . import models  # noqa: F401 -- needed so tables are registered on Base
 from .database import get_db
 from .image_utils import read_validated_image, save_normalized_image, save_upload_image
 from .models import ImageHistory, Prediction, Product
-from .prediction_service import ModelInferenceEngine
+from .prediction_service import ModelInferenceEngine, SUPPORTED_PRODUCE, validate_produce_type
 from .schemas import (
     AnalyzeResult,
     AnalyticsOut,
@@ -46,7 +47,22 @@ _upload_setting = Path(os.getenv("UPLOAD_DIRECTORY", "uploads"))
 UPLOAD_DIR = _upload_setting if _upload_setting.is_absolute() else BASE_DIR / _upload_setting
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Chrono-Fresh API", version="1.0.0")
+prediction_service = ModelInferenceEngine()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Load the configured prediction provider before serving requests."""
+    prediction_service.startup()
+    yield
+
+
+def utcnow() -> datetime:
+    """Return a naive UTC timestamp for the existing TIMESTAMP columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+app = FastAPI(title="Chrono-Fresh API", version="1.0.0", lifespan=lifespan)
 _cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
     "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
@@ -62,8 +78,6 @@ app.add_middleware(
 )
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-prediction_service = ModelInferenceEngine()
-
 
 
 @app.get("/")
@@ -78,6 +92,7 @@ def health():
 
 @app.post("/products", response_model=ProductOut)
 def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
+    _validate_produce_type(payload.produce_type.strip().lower())
     product = Product(
         produce_type=payload.produce_type.strip().lower(),
         variety=payload.variety,
@@ -266,6 +281,8 @@ async def upload_images(
         raise HTTPException(status_code=400, detail="At least one image is required")
     if product_id is None and not produce_type:
         raise HTTPException(status_code=400, detail="produce_type is required when creating new products")
+    if product_id is None:
+        _validate_produce_type(produce_type or "")
 
     batch_id = uuid4().hex
     shared_product = load_product(db, product_id) if product_id else None
@@ -287,7 +304,7 @@ async def upload_images(
         image_row = ImageHistory(
             product_id=product.product_id,
             image_path="pending",
-            capture_date=datetime.utcnow(),
+            capture_date=utcnow(),
             original_filename=upload.filename,
             batch_id=batch_id,
             batch_mode=batch_mode,
@@ -302,16 +319,37 @@ async def upload_images(
             image_row.thumbnail_path = str(thumbnail_path)
 
             prediction_result = prediction_service.predict(image_path, product.produce_type)
+            if prediction_result.analysis_status == "uncertain":
+                image_row.processing_status = "UNCERTAIN"
+                image_row.error_message = prediction_result.uncertainty_reason
+                db.commit()
+                db.refresh(product)
+                db.refresh(image_row)
+                results.append(
+                    UploadResult(
+                        batch_id=batch_id,
+                        product=product_to_out(product),
+                        image=image_to_out(image_row),
+                        prediction=None,
+                    )
+                )
+                continue
             prediction = Prediction(
                 image_id=image_row.image_id,
                 freshness_stage=prediction_result.freshness_stage,
                 days_remaining=prediction_result.days_remaining,
                 days_remaining_display=prediction_result.days_remaining_display,
                 confidence=prediction_result.confidence,
+                raw_model_confidence=prediction_result.raw_model_confidence,
                 advice=prediction_result.advice,
                 refrigeration_trigger=prediction_result.refrigeration_trigger,
                 fifo_priority=prediction_result.fifo_priority,
                 action_type=prediction_result.action_type,
+                analysis_status=prediction_result.analysis_status,
+                prediction_source=prediction_result.prediction_source,
+                model_version=prediction_result.model_version,
+                verification_status=prediction_result.verification_status,
+                model_class=prediction_result.model_class,
             )
             image_row.processing_status = "SUCCESS"
             product.status = "spoiled" if prediction_result.freshness_stage == "Spoiled" else "active"
@@ -400,11 +438,17 @@ def prediction_to_out(prediction: Prediction) -> PredictionOut:
         freshness_stage=prediction.freshness_stage,
         days_remaining=decimal_to_float(prediction.days_remaining) or 0,
         days_remaining_display=prediction.days_remaining_display,
-        confidence=decimal_to_float(prediction.confidence) or 0,
+        confidence=decimal_to_float(prediction.confidence),
+        raw_model_confidence=decimal_to_float(prediction.raw_model_confidence),
         advice=prediction.advice,
         refrigeration_trigger=bool(prediction.refrigeration_trigger),
         fifo_priority=prediction.fifo_priority or "STANDARD",
         action_type=prediction.action_type or "MONITOR",
+        analysis_status=prediction.analysis_status or "reliable",
+        prediction_source=prediction.prediction_source or "legacy",
+        model_version=prediction.model_version,
+        verification_status=prediction.verification_status or "not_requested",
+        model_class=prediction.model_class,
         predicted_at=prediction.predicted_at,
     )
 
@@ -420,7 +464,7 @@ def path_to_url(path: Optional[str]) -> Optional[str]:
 # API v1 routes — additive only, existing routes above are untouched
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_PRODUCE_TYPES = ["tomato", "banana", "guava", "apple", "mango"]
+_PRODUCE_TYPES = list(SUPPORTED_PRODUCE)
 _FRESHNESS_STAGES = ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"]
 _STORAGE_OPTIONS = ["room", "fridge", "container"]
 _MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
@@ -439,11 +483,25 @@ def _prediction_payload(result, produce_type: str) -> dict:
         "days_remaining": result.days_remaining,
         "days_remaining_display": result.days_remaining_display,
         "confidence": result.confidence,
+        "raw_model_confidence": result.raw_model_confidence,
         "advice": result.advice,
         "refrigeration_trigger": result.refrigeration_trigger,
         "fifo_priority": result.fifo_priority,
         "action_type": result.action_type,
+        "analysis_status": result.analysis_status,
+        "prediction_source": result.prediction_source,
+        "model_version": result.model_version,
+        "verification_status": result.verification_status,
+        "uncertainty_reason": result.uncertainty_reason,
+        "model_class": result.model_class,
     }
+
+
+def _validate_produce_type(produce_type: str) -> None:
+    try:
+        validate_produce_type(produce_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _issue_analysis_token(payload: dict) -> str:
@@ -455,7 +513,7 @@ def _issue_analysis_token(payload: dict) -> str:
     return f"{body}.{signature}"
 
 
-def _read_analysis_token(token: str, produce_type: str) -> dict:
+def _read_analysis_token(token: str, produce_type: str, image_sha256: str) -> dict:
     try:
         body, signature = token.rsplit(".", 1)
         expected = hmac.new(_ANALYSIS_SECRET, body.encode(), hashlib.sha256).hexdigest()
@@ -467,6 +525,8 @@ def _read_analysis_token(token: str, produce_type: str) -> dict:
             raise ValueError("expired")
         if payload["produce_type"] != produce_type:
             raise ValueError("produce type")
+        if payload.get("image_sha256") and payload["image_sha256"] != image_sha256:
+            raise ValueError("image")
         return payload
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail="Analysis token is invalid or expired. Analyze the image again.") from exc
@@ -483,7 +543,11 @@ def _is_use_soon(p: ProductOut) -> bool:
 
 @app.get("/api/v1/health", tags=["v1"])
 def v1_health():
-    return {"status": "ok", "version": "1.0.0"}
+    return {
+        "status": "ok", "version": "1.0.0",
+        "prediction_provider": prediction_service.provider_name,
+        "model_version": prediction_service.model_version,
+    }
 
 
 # ── API 2: Meta/configuration ──────────────────────────────────────────────────
@@ -494,7 +558,9 @@ def v1_meta():
         produce_types=_PRODUCE_TYPES,
         freshness_stages=_FRESHNESS_STAGES,
         storage_options=_STORAGE_OPTIONS,
-        use_real_model=os.getenv("USE_REAL_MODEL", "false").lower() == "true",
+        use_real_model=prediction_service.provider_name == "keras",
+        prediction_provider=prediction_service.provider_name,
+        model_version=prediction_service.model_version,
     )
 
 
@@ -507,12 +573,14 @@ async def v1_analyze(
 ):
     """Analyze a produce image and return freshness prediction without saving anything."""
     ptype = produce_type.strip().lower()
+    _validate_produce_type(ptype)
     normalized = await read_validated_image(file, _MAX_UPLOAD_MB)
     temp_path = UPLOAD_DIR / f"analysis_{uuid4().hex}.jpg"
     try:
         temp_path.write_bytes(normalized)
         payload = _prediction_payload(prediction_service.predict(temp_path, ptype), ptype)
-        return AnalyzeResult(**payload, analysis_token=_issue_analysis_token(payload))
+        token_payload = {**payload, "image_sha256": hashlib.sha256(normalized).hexdigest()}
+        return AnalyzeResult(**payload, analysis_token=_issue_analysis_token(token_payload))
     except HTTPException:
         raise
     except Exception as exc:
@@ -534,16 +602,19 @@ async def v1_create_produce(
 ):
     """Save a produce item with its first scan and prediction."""
     ptype = produce_type.strip().lower()
+    _validate_produce_type(ptype)
     normalized = await read_validated_image(file, _MAX_UPLOAD_MB)
     image_path: Optional[Path] = None
     thumbnail_path: Optional[Path] = None
     try:
         image_path, thumbnail_path = save_normalized_image(normalized, UPLOAD_DIR)
         payload = (
-            _read_analysis_token(analysis_token, ptype)
+            _read_analysis_token(analysis_token, ptype, hashlib.sha256(normalized).hexdigest())
             if analysis_token
             else _prediction_payload(prediction_service.predict(image_path, ptype), ptype)
         )
+        if payload.get("analysis_status", "reliable") == "uncertain":
+            raise HTTPException(status_code=422, detail="Uncertain analyses cannot be saved as a definite result. Scan again.")
         product = Product(
             produce_type=ptype,
             storage_type=storage_type or "room",
@@ -556,7 +627,7 @@ async def v1_create_produce(
             product_id=product.product_id,
             image_path=str(image_path),
             thumbnail_path=str(thumbnail_path),
-            capture_date=datetime.utcnow(),
+            capture_date=utcnow(),
             original_filename=file.filename,
             batch_id=uuid4().hex,
             batch_mode="single",
@@ -570,10 +641,16 @@ async def v1_create_produce(
             days_remaining=payload["days_remaining"],
             days_remaining_display=payload["days_remaining_display"],
             confidence=payload["confidence"],
+            raw_model_confidence=payload.get("raw_model_confidence", payload.get("confidence")),
             advice=payload["advice"],
             refrigeration_trigger=payload["refrigeration_trigger"],
             fifo_priority=payload["fifo_priority"],
             action_type=payload["action_type"],
+            analysis_status=payload.get("analysis_status", "reliable"),
+            prediction_source=payload.get("prediction_source", "legacy-token"),
+            model_version=payload.get("model_version"),
+            verification_status=payload.get("verification_status", "not_requested"),
+            model_class=payload.get("model_class"),
         )
         db.add(pred)
         db.commit()
@@ -672,7 +749,7 @@ async def v1_rescan_produce(
             product_id=product.product_id,
             image_path=str(image_path),
             thumbnail_path=str(thumbnail_path),
-            capture_date=datetime.utcnow(),
+            capture_date=utcnow(),
             original_filename=file.filename,
             batch_id=uuid4().hex,
             batch_mode="single",
@@ -681,16 +758,28 @@ async def v1_rescan_produce(
         db.add(image_row)
         db.flush()
         result = prediction_service.predict(image_path, product.produce_type)
+        if result.analysis_status == "uncertain":
+            image_row.processing_status = "UNCERTAIN"
+            image_row.error_message = result.uncertainty_reason
+            db.commit()
+            db.refresh(product)
+            return product_to_out(product)
         pred = Prediction(
             image_id=image_row.image_id,
             freshness_stage=result.freshness_stage,
             days_remaining=result.days_remaining,
             days_remaining_display=result.days_remaining_display,
             confidence=result.confidence,
+            raw_model_confidence=result.raw_model_confidence,
             advice=result.advice,
             refrigeration_trigger=result.refrigeration_trigger,
             fifo_priority=result.fifo_priority,
             action_type=result.action_type,
+            analysis_status=result.analysis_status,
+            prediction_source=result.prediction_source,
+            model_version=result.model_version,
+            verification_status=result.verification_status,
+            model_class=result.model_class,
         )
         db.add(pred)
         db.commit()
@@ -769,7 +858,7 @@ def v1_complete_produce(product_id: int, payload: CompleteRequest, db: Session =
         raise HTTPException(status_code=409, detail="This produce item is already completed.")
     product.status = "completed"
     product.outcome = payload.outcome
-    product.completed_at = datetime.utcnow()
+    product.completed_at = utcnow()
     db.commit()
     db.refresh(product)
     return product_to_out(product)

@@ -7,6 +7,9 @@ python-multipart
 pillow
 pillow-heif
 alembic
+keras==3.15.0
+tensorflow-cpu>=2.20,<2.22
+numpy>=1.26
 httpx
 pytest
 pytest-asyncio

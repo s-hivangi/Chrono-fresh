@@ -1,7 +1,16 @@
 # Architecture
 
-The website and Android app are two clients of one FastAPI API. FastAPI validates and normalizes uploaded images, calls the stub prediction provider, applies DSS guidance, and persists products, image history and predictions in PostgreSQL. Alembic owns the database schema.
+React and Expo are clients of one FastAPI/PostgreSQL API. Upload validation decodes images, enforces size/resolution, and normalizes to RGB JPEG. `PredictionProvider` selects either the explicit development stub or the startup-loaded Keras provider. Keras produces freshness scores and remaining days; a reliability gate may return uncertain, optionally consulting a constrained verifier only in that case. The DSS then converts definite model output into advice.
 
-The mobile app lives in `app/` and uses Expo Router. Its scan session holds the selected image and analyzed result between Scan Review and Result. The signed analysis token prevents a second unrelated prediction during Save. Rescans append history and never replace earlier observations.
+```text
+image + Banana/Guava selection
+  -> decode/quality checks
+  -> EfficientNetB3 multitask model
+  -> raw class score + days regression
+  -> reliability gate -> optional verifier on uncertainty only
+  -> definite result or rescan request
+  -> rule-based DSS guidance
+  -> signed Analyze token -> PostgreSQL Save
+```
 
-The React website uses the same API data, so dashboard, inventory, history and analytics reflect mobile changes without a second datastore.
+Alembic owns the schema. Prediction rows retain source, model identifier, raw confidence, reliability and verification status. The signed token includes an image digest, preserving Analyze → Save identity. Rescans append history; uncertain rescans are marked `UNCERTAIN` and do not become definite predictions.

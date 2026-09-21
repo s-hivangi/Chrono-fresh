@@ -1,22 +1,16 @@
 # ChronoFresh
 
-ChronoFresh is a local-first produce freshness and shelf-life product. A FastAPI API stores scans in PostgreSQL, a React website supports inventory and analytics, and an Expo Android app supports camera/gallery scanning and local reminders.
+ChronoFresh estimates visible freshness and remaining use time for **Banana and Guava only**. One FastAPI/PostgreSQL backend serves the React website and Expo Android application in `app/`.
 
-The current prediction provider is intentionally a deterministic stub. No trained model or fabricated model integration is included.
+The primary predictor is the supplied EfficientNetB3 Keras multitask model. It returns a five-class freshness softmax and a `days_to_spoilage` regression. A separate rule-based DSS converts those outputs into storage/use guidance. ChronoFresh is not a food-safety diagnostic: always check smell, texture, damage, and normal food-safety guidance.
+
+The teammate reported about 91% training accuracy and 41% testing accuracy. Raw softmax confidence is therefore shown as a model score, not guaranteed correctness. Low-confidence or otherwise unverified results become `uncertain` and request a rescan; an optional external verifier can only confirm an uncertain result when it agrees.
 
 ## Projects
 
-- `backend/` — FastAPI, SQLAlchemy, Alembic and the DSS/stub prediction contract
+- `backend/` — FastAPI, PostgreSQL/SQLAlchemy, Alembic, Keras inference, DSS and evaluation tool
 - `frontend/` — React/Vite website
-- `app/` — Expo Router Android application
-- `docs/` — API, architecture, demo and model handoff notes
+- `app/` — Expo Router Android application (the directory name remains `app/`)
+- `docs/` — API, architecture, model handoff and demo notes
 
-## Quick start
-
-1. Create a PostgreSQL database named `chronofresh`.
-2. Copy `backend/.env.example` to `backend/.env` and set the real PostgreSQL password.
-3. In `backend/`, install dependencies, run `alembic upgrade head`, then run `uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`.
-4. In `frontend/`, run `npm install` then `npm run dev`.
-5. In `app/`, run `npm install` then `npx expo start`; press `a` for an installed Android emulator or scan the QR code with Expo Go.
-
-See [RUNNING.md](RUNNING.md) for environment and Android networking details.
+See [RUNNING.md](RUNNING.md) for exact setup and commands.

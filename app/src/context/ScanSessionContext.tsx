@@ -17,13 +17,13 @@ const Context = createContext<ScanSession | null>(null);
 
 export function ScanSessionProvider({ children }: { children: React.ReactNode }) {
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [produceType, setProduceType] = useState('tomato');
+  const [produceType, setProduceType] = useState('banana');
   const [storageType, setStorageType] = useState('room');
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const value = useMemo(() => ({
     imageUri, produceType, storageType, result,
     setImageUri, setProduceType, setStorageType, setResult,
-    reset: () => { setImageUri(null); setResult(null); setProduceType('tomato'); setStorageType('room'); },
+    reset: () => { setImageUri(null); setResult(null); setProduceType('banana'); setStorageType('room'); },
   }), [imageUri, produceType, storageType, result]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

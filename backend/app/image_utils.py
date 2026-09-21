@@ -15,6 +15,7 @@ SUPPORTED_CONTENT_TYPES = {
     "image/heic",
     "image/heif",
 }
+MIN_IMAGE_DIMENSION = 96
 
 
 def register_heif_opener() -> None:
@@ -41,11 +42,18 @@ async def read_validated_image(upload: UploadFile, max_size_mb: int) -> bytes:
         with Image.open(io.BytesIO(raw)) as source:
             source.verify()
         with Image.open(io.BytesIO(raw)) as source:
+            if min(source.size) < MIN_IMAGE_DIMENSION:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Image is too small. Both dimensions must be at least {MIN_IMAGE_DIMENSION} pixels.",
+                )
             normalized = ImageOps.exif_transpose(source).convert("RGB")
             normalized.thumbnail((1080, 1080))
             output = io.BytesIO()
             normalized.save(output, "JPEG", quality=88, optimize=True)
             return output.getvalue()
+    except HTTPException:
+        raise
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="The uploaded file is not a valid decodable image.") from exc
 

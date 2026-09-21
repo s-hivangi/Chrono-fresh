@@ -7,12 +7,12 @@ from __future__ import annotations
 import io
 
 from app.main import _issue_analysis_token
-from app.prediction_service import format_days_remaining, run_dss_engine
+from app.prediction_service import format_days_remaining, run_dss_engine, uncertain_result
 
 
 def _token(days: float, stage: str = "Late Ripening") -> str:
     return _issue_analysis_token({
-        "produce_type": "tomato", "freshness_stage": stage,
+        "produce_type": "banana", "freshness_stage": stage,
         "days_remaining": days, "days_remaining_display": f"{days:.1f} days",
         "confidence": 0.91, "advice": "Test advice",
         "refrigeration_trigger": days <= 1, "fifo_priority": "PRIORITY_1",
@@ -33,7 +33,7 @@ def test_meta(client):
     assert r.status_code == 200
     data = r.json()
     assert "produce_types" in data
-    assert "tomato" in data["produce_types"]
+    assert data["produce_types"] == ["banana", "guava"]
     assert "freshness_stages" in data
     assert len(data["freshness_stages"]) == 5
     assert data["use_real_model"] is False
@@ -45,7 +45,7 @@ def test_analyze_valid_image(client, single_file, tiny_jpeg):
     r = client.post(
         "/api/v1/analyze",
         files=[single_file],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     )
     assert r.status_code == 200
     data = r.json()
@@ -64,12 +64,12 @@ def test_analyze_result_is_exactly_the_saved_initial_prediction(client, tiny_jpe
     analyzed = client.post(
         "/api/v1/analyze",
         files=[("file", ("same.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     ).json()
     saved = client.post(
         "/api/v1/produce",
         files=[("file", ("same.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
-        data={"produce_type": "tomato", "analysis_token": analyzed["analysis_token"]},
+        data={"produce_type": "banana", "analysis_token": analyzed["analysis_token"]},
     )
     assert saved.status_code == 201
     prediction = client.get(f"/api/v1/produce/{saved.json()['product_id']}/history").json()[0]["prediction"]
@@ -78,21 +78,30 @@ def test_analyze_result_is_exactly_the_saved_initial_prediction(client, tiny_jpe
 
 
 def test_analyze_no_file(client):
-    r = client.post("/api/v1/analyze", data={"produce_type": "tomato"})
+    r = client.post("/api/v1/analyze", data={"produce_type": "banana"})
+    assert r.status_code == 422
+
+
+def test_analyze_rejects_unsupported_produce(client, tiny_jpeg):
+    r = client.post(
+        "/api/v1/analyze",
+        files=[("file", ("apple.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
+        data={"produce_type": "apple"},
+    )
     assert r.status_code == 422
 
 
 def test_dss_uses_canonical_stages_and_exact_days():
     assert format_days_remaining(7.04) == "7.0 days"
     cases = {
-        "Fresh": "Fresh — 7.0 days remaining.",
-        "Early Ripening": "Ripening — 4.2 days remaining.",
-        "Mid-Ripening": "Ripe — 3.0 days remaining.",
-        "Late Ripening": "Overripe — 0.9 days remaining.",
-        "Spoiled": "Spoiled — this item should be discarded.",
+        "Fresh": "Fresh appearance — estimated 7.0 days remaining.",
+        "Early Ripening": "Ripening appearance — estimated 4.2 days remaining.",
+        "Mid-Ripening": "Ripe appearance — estimated 3.0 days remaining.",
+        "Late Ripening": "Overripe appearance — estimated 0.9 days remaining.",
+        "Spoiled": "Spoiled appearance — discard if normal food-safety checks agree.",
     }
     for stage, expected_start in cases.items():
-        advice = run_dss_engine(stage, {"Fresh": 7.0, "Early Ripening": 4.2, "Mid-Ripening": 3.0, "Late Ripening": 0.9, "Spoiled": 0.0}[stage], "tomato")[3]
+        advice = run_dss_engine(stage, {"Fresh": 7.0, "Early Ripening": 4.2, "Mid-Ripening": 3.0, "Late Ripening": 0.9, "Spoiled": 0.0}[stage], "banana")[3]
         assert advice.startswith(expected_start)
         assert "PRISTINE" not in advice
         assert "warehouse" not in advice.lower()
@@ -102,7 +111,7 @@ def test_analyze_text_file(client):
     r = client.post(
         "/api/v1/analyze",
         files=[("file", ("bad.txt", io.BytesIO(b"not an image"), "text/plain"))],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     )
     assert r.status_code == 400
 
@@ -113,12 +122,12 @@ def test_create_produce(client, single_file):
     r = client.post(
         "/api/v1/produce",
         files=[single_file],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     )
     assert r.status_code == 201
     data = r.json()
     assert "product_id" in data
-    assert data["produce_type"] == "tomato"
+    assert data["produce_type"] == "banana"
     assert data["status"] == "active"
     assert data["outcome"] is None
 
@@ -127,7 +136,7 @@ def test_corrupt_image_leaves_no_ghost_product(client):
     response = client.post(
         "/api/v1/produce",
         files=[("file", ("fake.jpg", io.BytesIO(b"not really a jpeg"), "image/jpeg"))],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     )
     assert response.status_code == 400
     assert client.get("/api/v1/produce?status=all").json() == []
@@ -135,13 +144,13 @@ def test_corrupt_image_leaves_no_ghost_product(client):
 
 # ── List produce ───────────────────────────────────────────────────────────────
 
-def _create_tomato(client, single_file, tiny_jpeg):
-    """Helper: create a saved tomato, return product_id."""
+def _create_banana(client, single_file, tiny_jpeg):
+    """Helper: create a saved banana, return product_id."""
     import io as _io
     r = client.post(
         "/api/v1/produce",
         files=[("file", ("t.jpg", _io.BytesIO(tiny_jpeg), "image/jpeg"))],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     )
     assert r.status_code == 201
     return r.json()["product_id"]
@@ -152,7 +161,7 @@ def test_list_active_produce(client, tiny_jpeg):
     client.post(
         "/api/v1/produce",
         files=[("file", ("t.jpg", _io.BytesIO(tiny_jpeg), "image/jpeg"))],
-        data={"produce_type": "tomato"},
+        data={"produce_type": "banana"},
     )
     r = client.get("/api/v1/produce")
     assert r.status_code == 200
@@ -171,7 +180,7 @@ def test_list_completed_initially_empty(client):
 
 def test_get_produce_detail(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
     r = client.get(f"/api/v1/produce/{pid}")
     assert r.status_code == 200
     assert r.json()["product_id"] == pid
@@ -186,7 +195,7 @@ def test_get_produce_not_found(client):
 
 def test_rescan_creates_additional_history(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
 
     # Rescan
     r2 = client.post(
@@ -205,7 +214,7 @@ def test_rescan_creates_additional_history(client, tiny_jpeg):
 
 def test_timeline_chronological_order(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
     client.post(
         f"/api/v1/produce/{pid}/rescan",
         files=[("file", ("r.jpg", _io.BytesIO(tiny_jpeg), "image/jpeg"))],
@@ -222,7 +231,7 @@ def test_timeline_chronological_order(client, tiny_jpeg):
 
 def test_complete_consumed_removes_from_active(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
 
     rc = client.post(f"/api/v1/produce/{pid}/complete", json={"outcome": "consumed"})
     assert rc.status_code == 200
@@ -241,14 +250,14 @@ def test_complete_consumed_removes_from_active(client, tiny_jpeg):
 
 def test_complete_invalid_outcome(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
     r = client.post(f"/api/v1/produce/{pid}/complete", json={"outcome": "thrown_away"})
     assert r.status_code == 422
 
 
 def test_complete_already_completed(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
     client.post(f"/api/v1/produce/{pid}/complete", json={"outcome": "discarded"})
     r2 = client.post(f"/api/v1/produce/{pid}/complete", json={"outcome": "consumed"})
     assert r2.status_code == 409
@@ -258,7 +267,7 @@ def test_complete_already_completed(client, tiny_jpeg):
 
 def test_dashboard_aggregates_correctly(client, tiny_jpeg):
     import io as _io
-    _create_tomato(client, None, tiny_jpeg)
+    _create_banana(client, None, tiny_jpeg)
     r = client.get("/api/v1/dashboard")
     assert r.status_code == 200
     data = r.json()
@@ -274,7 +283,7 @@ def test_zero_days_sorts_first_and_use_first_excludes_fresh(client, tiny_jpeg):
         response = client.post(
             "/api/v1/produce",
             files=[("file", (f"{days}.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
-            data={"produce_type": "tomato", "analysis_token": _token(days, stage)},
+            data={"produce_type": "banana", "analysis_token": _token(days, stage)},
         )
         ids.append(response.json()["product_id"])
     listed = client.get("/api/v1/produce?sort=urgency").json()
@@ -287,7 +296,7 @@ def test_zero_days_sorts_first_and_use_first_excludes_fresh(client, tiny_jpeg):
 
 def test_analytics_counts_update_after_lifecycle(client, tiny_jpeg):
     import io as _io
-    pid = _create_tomato(client, None, tiny_jpeg)
+    pid = _create_banana(client, None, tiny_jpeg)
 
     r1 = client.get("/api/v1/analytics")
     assert r1.status_code == 200
@@ -325,3 +334,20 @@ def test_prediction_stub_produces_valid_output(client, tiny_jpeg):
     assert isinstance(d["refrigeration_trigger"], bool)
     assert isinstance(d["fifo_priority"], str)
     assert isinstance(d["action_type"], str)
+
+
+def test_legacy_upload_marks_uncertain_results_without_creating_a_prediction(client, tiny_jpeg, monkeypatch):
+    monkeypatch.setattr(
+        "app.main.prediction_service.predict",
+        lambda *_args: uncertain_result("low confidence", "test-model", "stub", 0.2, "index:1"),
+    )
+    response = client.post(
+        "/upload",
+        files=[("files", ("uncertain.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
+        data={"produce_type": "banana"},
+    )
+    assert response.status_code == 200
+    payload = response.json()[0]
+    assert payload["prediction"] is None
+    assert payload["image"]["processing_status"] == "UNCERTAIN"
+    assert payload["image"]["error_message"] == "low confidence"

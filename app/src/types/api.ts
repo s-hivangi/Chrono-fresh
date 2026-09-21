@@ -22,11 +22,17 @@ export interface PredictionOut {
   freshness_stage: string;
   days_remaining: number;
   days_remaining_display: string;
-  confidence: number;
+  confidence?: number | null;
+  raw_model_confidence?: number | null;
   advice: string;
   refrigeration_trigger: boolean;
   fifo_priority: string;
   action_type: string;
+  analysis_status: 'reliable' | 'verified' | 'uncertain';
+  prediction_source: string;
+  model_version?: string | null;
+  verification_status: string;
+  model_class?: string | null;
   predicted_at?: string | null;
 }
 
@@ -49,14 +55,21 @@ export interface ImageHistoryOut {
 export interface AnalyzeResult {
   analysis_token: string;
   produce_type: string;
-  freshness_stage: string;
-  days_remaining: number;
-  days_remaining_display: string;
-  confidence: number;
+  freshness_stage?: string | null;
+  days_remaining?: number | null;
+  days_remaining_display?: string | null;
+  confidence?: number | null;
+  raw_model_confidence?: number | null;
   advice: string;
   refrigeration_trigger: boolean;
   fifo_priority: string;
   action_type: string;
+  analysis_status: 'reliable' | 'verified' | 'uncertain';
+  prediction_source: string;
+  model_version: string;
+  verification_status: string;
+  uncertainty_reason?: string | null;
+  model_class?: string | null;
 }
 
 export interface MetaOut {
@@ -64,6 +77,9 @@ export interface MetaOut {
   freshness_stages: string[];
   storage_options: string[];
   use_real_model: boolean;
+  prediction_provider: string;
+  model_version: string;
+  confidence_label: string;
 }
 
 export interface DashboardV1Stats {

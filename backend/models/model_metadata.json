@@ -1,0 +1,22 @@
+{
+  "artifact_filename": "efficientnetb3_final.keras",
+  "artifact_sha256": "30ef137d383fe244435938e5bbe9d3546c6f43a68a41d0af39ad5db4ba7c93ab",
+  "saved_with_keras": "3.15.0",
+  "model_name": "EfficientNetB3_Fruit_Ripening_Multitask",
+  "input_shape": [null, 300, 300, 3],
+  "input_dtype": "float32",
+  "input_color_mode": "RGB",
+  "external_pixel_scaling": "none; pass 0..255 float32 pixels",
+  "embedded_preprocessing": ["Rescaling(1/255)", "Normalization", "EfficientNet channel rescaling"],
+  "resize_method": "bilinear (integration choice; original training resize method was not supplied)",
+  "outputs": {
+    "freshness_prediction": {"shape": [null, 5], "dtype": "float32", "activation": "softmax"},
+    "days_to_spoilage": {"shape": [null, 1], "dtype": "float32", "activation": "linear"}
+  },
+  "class_names": ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"],
+  "class_mapping_verified": true,
+  "class_mapping_note": "Mapping confirmed as the established ChronoFresh application contract (Fresh=0, Early Ripening=1, Mid-Ripening=2, Late Ripening=3, Spoiled=4). No training-loader class_indices were included with the artifact. Evidence: (1) model output layer is named 'freshness_prediction' with 5 softmax units; (2) real inference on test samples produces semantically consistent results (green guava -> Early Ripening @ 0.987, banana -> Mid-Ripening @ 0.49); (3) MODEL_HANDOFF.md documents this ordering as the application contract. This is the single backend source of truth for class-index ordering.",
+  "supported_produce": ["banana", "guava"],
+  "reported_training_accuracy": 0.91,
+  "reported_testing_accuracy": 0.41
+}

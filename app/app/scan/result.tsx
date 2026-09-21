@@ -10,7 +10,7 @@ import { useScanSession } from '../../src/context/ScanSessionContext';
 import { scheduleProduceReminder } from '../../src/utils/notifications';
 import { generateScanId } from '../../src/utils/scanIds';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../../src/theme';
-import { STAGE_COLORS, STAGE_BG, formatDays, getRecommendation } from '../../src/utils/helpers';
+import { STAGE_COLORS, STAGE_BG, formatDays } from '../../src/utils/helpers';
 
 /** Translate numeric confidence (0-1) into a plain label + color dot. */
 function confidenceIndicator(confidence: number): { label: string; color: string } {
@@ -40,11 +40,34 @@ export default function ResultScreen() {
     );
   }
 
+  if (result.analysis_status === 'uncertain' || !result.freshness_stage || result.days_remaining == null) {
+    return (
+      <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+        <Image source={{ uri: session.imageUri }} style={styles.image} resizeMode="cover" />
+        <Text style={styles.produceLabel}>{result.produce_type.toUpperCase()}</Text>
+        <View style={[styles.freshnessBanner, { backgroundColor: '#fff7ed' }]}>
+          <Text style={[styles.freshnessStage, { color: '#c2410c' }]}>We couldn't assess this fruit confidently</Text>
+        </View>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Try another photo</Text>
+          <Text style={styles.cardBody}>
+            We couldn't assess this fruit confidently.{'\n'}Please try another photo.
+          </Text>
+          <Text style={[styles.cardBody, { marginTop: 8 }]}>
+            Tips: use good lighting, show the full fruit, avoid blur, and use a plain background.
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.primary} onPress={() => { session.reset(); router.replace('/(tabs)/scan'); }}>
+          <Text style={styles.primaryText}>Choose Another Photo</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
   const stage = result.freshness_stage;
   const stageColor = STAGE_COLORS[stage] ?? COLORS.muted;
   const stageBg = STAGE_BG[stage] ?? '#f1f5f9';
-  const { label: confLabel, color: confColor } = confidenceIndicator(result.confidence);
-  const recommendation = getRecommendation(stage, result.days_remaining, result.produce_type);
+  const { label: confLabel, color: confColor } = confidenceIndicator(result.raw_model_confidence ?? result.confidence ?? 0);
 
   async function save() {
     if (!session.imageUri || !result) return;
@@ -87,21 +110,21 @@ export default function ResultScreen() {
         </Text>
       </View>
 
-      {/* Confidence indicator (no raw numbers) */}
+      {/* Raw softmax score is not calibrated correctness probability. */}
       <View style={styles.confidenceRow}>
         <View style={[styles.confidenceDot, { backgroundColor: confColor }]} />
-        <Text style={styles.confidenceText}>{confLabel}</Text>
+        <Text style={styles.confidenceText}>Model confidence: {confLabel} (not accuracy)</Text>
       </View>
 
       {/* Recommendation */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>What to do</Text>
-        <Text style={styles.cardBody}>{recommendation}</Text>
+        <Text style={styles.cardBody}>{result.advice}</Text>
       </View>
 
       {/* Disclaimer */}
       <Text style={styles.disclaimer}>
-        This is an estimate based on visible appearance. Check smell, texture, and any damage before consuming.
+        ChronoFresh provides an estimate based on visible appearance. Check smell, texture, damage and normal food-safety guidance before consuming.
       </Text>
 
       {/* Save button */}
@@ -196,6 +219,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { ...TYPOGRAPHY.h3, marginBottom: 8 },
   cardBody: { ...TYPOGRAPHY.body, lineHeight: 22 },
+  reason: { ...TYPOGRAPHY.small, color: COLORS.muted, marginTop: 10, lineHeight: 18 },
 
   disclaimer: {
     ...TYPOGRAPHY.small,

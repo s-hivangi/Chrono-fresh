@@ -24,23 +24,26 @@ export default function ScanPage() {
   const inputRef = useRef();
 
   const [files, setFiles] = useState([]);
-  const [produce, setProduce] = useState('tomato');
+  const [produce, setProduce] = useState('banana');
   const [dragging, setDrag] = useState(false);
   const [result, setResult] = useState(null);   // AnalyzeResult from /api/v1/analyze
   const [saveError, setSaveError] = useState('');
+  const [analyzedFile, setAnalyzedFile] = useState(null);
 
   const { data: meta } = useQuery({
     queryKey: ['meta'],
     queryFn: getMeta,
     staleTime: Infinity,
   });
-  const produceTypes = meta?.produce_types ?? ['tomato', 'banana', 'guava', 'apple', 'mango'];
+  const produceTypes = meta?.produce_types ?? ['banana', 'guava'];
 
   // Step 1: Analyze (no save)
   const analyzeMutation = useMutation({
     mutationFn: async () => {
       const fd = new FormData();
-      fd.append('file', await compressImage(files[0]));
+      const prepared = await compressImage(files[0]);
+      setAnalyzedFile(prepared);
+      fd.append('file', prepared);
       fd.append('produce_type', produce);
       return analyzeProduce(fd);
     },
@@ -51,7 +54,7 @@ export default function ScanPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const fd = new FormData();
-      fd.append('file', await compressImage(files[0]));
+      fd.append('file', analyzedFile);
       fd.append('produce_type', produce);
       fd.append('analysis_token', result.analysis_token);
       return createProduce(fd);
@@ -69,6 +72,7 @@ export default function ScanPage() {
     if (images.length) {
       setFiles([images[0]]); // only first image used for analyze+save
       setResult(null);
+      setAnalyzedFile(null);
       setSaveError('');
     }
   }
@@ -160,7 +164,23 @@ export default function ScanPage() {
           {!result ? (
             <div className="panel">
               <div className="empty-state">
-                Upload a produce image to see the AI quality assessment.
+                Upload a Banana or Guava image to see a visible-freshness estimate.
+              </div>
+            </div>
+          ) : result.analysis_status === 'uncertain' ? (
+            <div className="result-card">
+              <div className="result-header stage-late">
+                <div>
+                  <div className="result-stage-label">Unable to assess — {cap(result.produce_type)}</div>
+                  <div className="result-stage">Scan Again</div>
+                </div>
+              </div>
+              <div className="result-body">
+                <p>We couldn't assess this fruit confidently.</p>
+                <p>Please try another photo.</p>
+                <button className="primary-btn" onClick={() => { setResult(null); setFiles([]); setAnalyzedFile(null); }}>
+                  Choose Another Photo
+                </button>
               </div>
             </div>
           ) : (
@@ -175,14 +195,14 @@ export default function ScanPage() {
               <div className="result-body">
                 <div className="result-row">
                   <div>
-                    <div className="result-item-label">Shelf Life Remaining</div>
+                    <div className="result-item-label">Model-estimated use window</div>
                     <div className="result-item-value">{result.days_remaining_display}</div>
                     <div className="result-item-sub">{result.days_remaining.toFixed(1)} days estimate</div>
                   </div>
                   <div>
-                    <div className="result-item-label">AI Confidence</div>
-                    <div className="result-item-value">{Math.round(result.confidence * 100)}%</div>
-                    <div className="result-item-sub">Visual freshness model</div>
+                    <div className="result-item-label">Model confidence</div>
+                    <div className="result-item-value">{Math.round(result.raw_model_confidence * 100)}%</div>
+                    <div className="result-item-sub">Raw model score, not calibrated accuracy</div>
                   </div>
                 </div>
                 <div className={`dss-box${result.refrigeration_trigger ? ' late' : ''}`}>
@@ -202,7 +222,7 @@ export default function ScanPage() {
                   </button>
                   <button
                     className="seg-btn"
-                    onClick={() => { setResult(null); setFiles([]); setSaveError(''); }}
+                    onClick={() => { setResult(null); setFiles([]); setAnalyzedFile(null); setSaveError(''); }}
                     style={{ flex: 1 }}
                   >
                     Scan Again
@@ -211,7 +231,7 @@ export default function ScanPage() {
                 {saveError && <div className="error-msg">{saveError}</div>}
 
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, lineHeight: 1.5 }}>
-                  This is an AI estimate from visual appearance and does not replace normal food-safety checks.
+                  ChronoFresh provides an estimate based on visible appearance. Check smell, texture, damage and normal food-safety guidance before consuming.
                 </p>
               </div>
             </div>

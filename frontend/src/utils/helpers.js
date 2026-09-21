@@ -1,5 +1,9 @@
-export const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
-export const PRODUCE_TYPES = ["guava", "banana", "tomato", "apple", "mango"];
+export const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_BASE ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, '');
+export const PRODUCE_TYPES = ["banana", "guava"];
 export const STAGES = ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"];
 
 export function cap(s) {

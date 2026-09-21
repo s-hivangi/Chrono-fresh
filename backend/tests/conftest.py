@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 os.environ["CHRONOFRESH_TESTING"] = "true"
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("USE_REAL_MODEL", "false")
+os.environ.setdefault("PREDICTION_PROVIDER", "stub")
 os.environ.setdefault(
     "CORS_ORIGINS",
     "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
@@ -63,7 +64,7 @@ def client():
 @pytest.fixture()
 def tiny_jpeg() -> bytes:
     buf = io.BytesIO()
-    Image.new("RGB", (4, 4), color=(200, 80, 60)).save(buf, format="JPEG")
+    Image.new("RGB", (320, 320), color=(200, 80, 60)).save(buf, format="JPEG")
     return buf.getvalue()
 
 

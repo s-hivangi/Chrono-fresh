@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import OutlineIcon from '../shared/OutlineIcon.jsx';
+import { getMeta } from '../../api/meta.js';
 
 const NAV = [
   { to: '/',          label: 'Dashboard',  icon: 'home' },
@@ -11,6 +13,18 @@ const NAV = [
 ];
 
 export default function Sidebar() {
+  const { data: meta } = useQuery({
+    queryKey: ['meta'],
+    queryFn: getMeta,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const modelLabel = meta?.prediction_provider === 'keras'
+    ? 'Keras model'
+    : meta?.prediction_provider === 'stub'
+      ? 'Stub model'
+      : 'Quality engine';
+
   return (
     <nav className="sidebar">
       <div className="sidebar-brand">
@@ -34,7 +48,7 @@ export default function Sidebar() {
         ))}
       </ul>
       <div className="sidebar-footer">
-        <span className="sidebar-version">v1.0 · Stub Model</span>
+        <span className="sidebar-version">v1.0 · {modelLabel}</span>
       </div>
     </nav>
   );
