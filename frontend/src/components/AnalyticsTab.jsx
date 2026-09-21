@@ -68,10 +68,10 @@ export default function AnalyticsTab({ selected, timeline, productHistory }) {
                 <Line
                   type="monotone"
                   dataKey="days_remaining"
-                  stroke="var(--green-mid)"
+                  stroke="var(--s-fresh)"
                   strokeWidth={2.5}
-                  dot={{ r: 5, fill: "var(--green-deep)", strokeWidth: 0 }}
-                  activeDot={{ r: 7, fill: "var(--rose-mid)" }}
+                  dot={{ r: 5, fill: "var(--green-dark)", strokeWidth: 0 }}
+                  activeDot={{ r: 7, fill: "var(--s-late)" }}
                 />
               </LineChart>
             </ResponsiveContainer>
