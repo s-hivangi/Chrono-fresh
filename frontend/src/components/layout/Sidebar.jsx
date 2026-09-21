@@ -27,10 +27,18 @@ export default function Sidebar() {
 
   return (
     <nav className="sidebar">
+      {/* ── Brand ── */}
       <div className="sidebar-brand">
-        <span className="brand-icon"><OutlineIcon name="history" size={22} /></span>
-        <span className="brand-name">ChronoFresh</span>
+        <div className="brand-logo-badge">
+          <img src="/logo.png" alt="Chrono-Fresh logo" />
+        </div>
+        <div className="brand-text">
+          <span className="brand-name">Chrono-Fresh</span>
+          <span className="brand-tagline">Freshness Tracker</span>
+        </div>
       </div>
+
+      {/* ── Navigation ── */}
       <ul className="sidebar-nav">
         {NAV.map(({ to, label, icon }) => (
           <li key={to}>
@@ -47,6 +55,8 @@ export default function Sidebar() {
           </li>
         ))}
       </ul>
+
+      {/* ── Footer ── */}
       <div className="sidebar-footer">
         <span className="sidebar-version">v1.0 · {modelLabel}</span>
       </div>
