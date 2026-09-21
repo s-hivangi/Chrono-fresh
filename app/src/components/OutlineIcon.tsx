@@ -4,6 +4,7 @@ import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 export type OutlineIconName =
   | 'home'
   | 'scan'
+  | 'history'
   | 'bell'
   | 'settings'
   | 'warning'
@@ -40,6 +41,9 @@ export default function OutlineIcon({ name, color, size = 22, strokeWidth = 1.8 
         <Rect {...common} x="5" y="6" width="14" height="12" rx="2" />
         <Circle {...common} cx="12" cy="12" r="3" />
         <Path {...common} d="M8 6 9 4h6l1 2M16.5 9.5h.01" />
+      </>}
+      {name === 'history' && <>
+        <Path {...common} d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5" />
       </>}
       {name === 'bell' && <Path {...common} d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />}
       {name === 'settings' && <>

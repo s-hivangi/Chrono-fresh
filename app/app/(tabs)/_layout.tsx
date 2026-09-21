@@ -44,6 +44,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="history"
+        options={{
+          title: 'History',
+          tabBarLabel: 'History',
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
+            <TabIcon name="history" color={color} focused={focused} activeColor={colors.greenDark} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="alerts"
         options={{
           title: 'Alerts',
@@ -63,10 +73,8 @@ export default function TabLayout() {
           ),
         }}
       />
-
-      {/* Hide legacy tabs from the bar — files kept for scan history wiring */}
+      {/* Keep the legacy produce screen out of the bar. */}
       <Tabs.Screen name="produce" options={{ href: null }} />
-      <Tabs.Screen name="history" options={{ href: null }} />
     </Tabs>
   );
 }

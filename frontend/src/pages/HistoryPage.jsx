@@ -19,9 +19,6 @@ export default function HistoryPage() {
   if (isLoading) return <LoadingSpinner label="Loading history…" />;
   if (isError) return <ErrorState message={error.message} onRetry={refetch} />;
 
-  const filtered =
-    tab === 'all' ? data : data.filter((p) => p.outcome === tab);
-
   return (
     <div className="page">
       <div className="page-header">
