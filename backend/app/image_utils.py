@@ -15,7 +15,9 @@ SUPPORTED_CONTENT_TYPES = {
     "image/heic",
     "image/heif",
 }
+HEIF_CONTENT_TYPES = {"image/heic", "image/heif"}
 MIN_IMAGE_DIMENSION = 96
+HEIF_UNSUPPORTED_DETAIL = "HEIC/HEIF images are not supported on this system. Please upload JPEG or PNG."
 
 
 def register_heif_opener() -> None:
