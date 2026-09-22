@@ -39,7 +39,8 @@ async def read_validated_image(upload: UploadFile, max_size_mb: int) -> bytes:
     if len(raw) > max_size_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {max_size_mb} MB.")
 
-    register_heif_opener()
+    if upload.content_type in HEIF_CONTENT_TYPES:
+        register_heif_opener()
     try:
         with Image.open(io.BytesIO(raw)) as source:
             source.verify()
