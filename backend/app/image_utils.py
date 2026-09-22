@@ -23,9 +23,9 @@ HEIF_UNSUPPORTED_DETAIL = "HEIC/HEIF images are not supported on this system. Pl
 def register_heif_opener() -> None:
     try:
         from pillow_heif import register_heif_opener as register
-    except ImportError:
-        return
-    register()
+        register()
+    except (ImportError, OSError) as exc:
+        raise HTTPException(status_code=415, detail=HEIF_UNSUPPORTED_DETAIL) from exc
 
 
 async def read_validated_image(upload: UploadFile, max_size_mb: int) -> bytes:
