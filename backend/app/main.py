@@ -396,6 +396,8 @@ def load_product(db: Session, product_id: int) -> Product:
 def product_to_out(product: Product) -> ProductOut:
     latest_image = max(product.images, key=lambda image: image.capture_date, default=None)
     latest_prediction = latest_image.prediction if latest_image else None
+    latest_scan_at = _as_utc(latest_image.capture_date) if latest_image else None
+    next_recheck_at = _next_recheck_at(latest_scan_at, latest_prediction)
     return ProductOut(
         product_id=product.product_id,
         produce_type=product.produce_type,
@@ -410,6 +412,8 @@ def product_to_out(product: Product) -> ProductOut:
         latest_days_remaining=decimal_to_float(latest_prediction.days_remaining) if latest_prediction else None,
         latest_days_display=latest_prediction.days_remaining_display if latest_prediction else None,
         latest_thumbnail_url=path_to_url(latest_image.thumbnail_path) if latest_image else None,
+        latest_scan_at=latest_scan_at,
+        next_recheck_at=next_recheck_at,
     )
 
 
@@ -537,6 +541,40 @@ def _is_use_soon(p: ProductOut) -> bool:
         p.latest_stage in {"Late Ripening", "Spoiled"}
         or (p.latest_days_remaining is not None and p.latest_days_remaining <= 1.5)
     )
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Expose legacy naive UTC database timestamps as explicit UTC API times."""
+    return (
+        value.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None
+        else value.astimezone(timezone.utc)
+    )
+
+
+def _next_recheck_at(
+    scan_at: Optional[datetime], prediction: Optional[Prediction],
+) -> Optional[datetime]:
+    """Return the UTC moment at which a scan should be checked again.
+
+    A prediction is an estimate from the moment its photo was captured; it is
+    not a promise that the fruit has changed stage.  This timestamp therefore
+    drives a "recheck due" alert, inviting the user to rescan and confirm the
+    next stage rather than silently changing the recorded prediction.
+    """
+    if scan_at is None or prediction is None or prediction.days_remaining is None:
+        return None
+    scan_at_utc = _as_utc(scan_at)
+    return scan_at_utc + timedelta(days=float(prediction.days_remaining))
+
+
+def _is_recheck_due(product: ProductOut, now: Optional[datetime] = None) -> bool:
+    if product.next_recheck_at is None:
+        return False
+    current_time = now or datetime.now(timezone.utc)
+    due_at = product.next_recheck_at
+    due_at_utc = _as_utc(due_at)
+    return due_at_utc <= current_time
 
 
 # ── API 1: Health ──────────────────────────────────────────────────────────────
@@ -878,6 +916,8 @@ def v1_dashboard(db: Session = Depends(get_db)):
     active.sort(key=_urgency_key)
 
     use_soon = [p for p in active if _is_use_soon(p)]
+    recheck_due = [p for p in active if _is_recheck_due(p)]
+    recheck_due.sort(key=lambda p: p.next_recheck_at or datetime.max.replace(tzinfo=timezone.utc))
     fresh = [p for p in active if p.latest_stage == "Fresh"]
     spoiled = [p for p in active if p.latest_stage == "Spoiled"]
 
@@ -902,6 +942,7 @@ def v1_dashboard(db: Session = Depends(get_db)):
         use_first=use_soon[:5],
         recent_scans=[image_to_out(img) for img in recent_images],
         all_active=active,
+        recheck_due=recheck_due,
     )
 
 

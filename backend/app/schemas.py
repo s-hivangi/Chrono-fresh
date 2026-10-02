@@ -30,6 +30,11 @@ class ProductOut(BaseModel):
     latest_days_remaining: Optional[float] = None
     latest_days_display: Optional[str] = None
     latest_thumbnail_url: Optional[str] = None
+    # The latest scan plus its predicted shelf-life window.  These values are
+    # derived rather than stored, so a rescan automatically replaces the old
+    # reminder window without a database migration.
+    latest_scan_at: Optional[datetime] = None
+    next_recheck_at: Optional[datetime] = None
 
 
 class PredictionOut(BaseModel):
@@ -155,6 +160,7 @@ class DashboardV1Out(BaseModel):
     use_first: List[ProductOut]
     recent_scans: List[ImageHistoryOut]
     all_active: List[ProductOut]
+    recheck_due: List[ProductOut]
 
 
 class ScanOverTime(BaseModel):
