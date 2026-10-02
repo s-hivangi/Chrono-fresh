@@ -1,15 +1,26 @@
-import Constants from 'expo-constants';
+/** Expo embeds this URL from app/.env when Metro bundles the app. */
+function resolveApiBaseUrl(): { url: string; error: string | null } {
+  const value = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (!value) {
+    return {
+      url: '',
+      error: 'Analysis service is not configured. Set EXPO_PUBLIC_API_BASE_URL in app/.env to your computer\'s Wi-Fi address, then restart Expo.',
+    };
+  }
 
-/**
- * Use EXPO_PUBLIC_API_BASE_URL for deployed builds or a fixed local address.
- * During Expo development, derive the computer host from the Expo dev server
- * so Expo Go on a physical device does not try to call Android's emulator host.
- */
-function developmentApiUrl() {
-  const hostUri = Constants.expoConfig?.hostUri ?? Constants.expoGoConfig?.debuggerHost;
-  const host = hostUri?.split(':')[0];
-  return host ? `http://${host}:8000` : 'http://10.0.2.2:8000';
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { url: '', error: 'Analysis service URL is invalid. Set EXPO_PUBLIC_API_BASE_URL to a full HTTP or HTTPS URL, then reload the app.' };
+  }
+  if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.hostname) {
+    return { url: '', error: 'Analysis service URL must be a full HTTP or HTTPS URL. Update EXPO_PUBLIC_API_BASE_URL, then reload the app.' };
+  }
+
+  return { url: value.replace(/\/+$/, ''), error: null };
 }
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? developmentApiUrl();
+const apiConfiguration = resolveApiBaseUrl();
+export const API_BASE_URL = apiConfiguration.url;
+export const API_CONFIGURATION_ERROR = apiConfiguration.error;

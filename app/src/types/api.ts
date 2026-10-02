@@ -14,6 +14,8 @@ export interface ProductOut {
   latest_days_remaining?: number | null;
   latest_days_display?: string | null;
   latest_thumbnail_url?: string | null;
+  latest_scan_at?: string | null;
+  next_recheck_at?: string | null;
 }
 
 export interface PredictionOut {
@@ -94,6 +96,7 @@ export interface DashboardV1Out {
   use_first: ProductOut[];
   recent_scans: ImageHistoryOut[];
   all_active: ProductOut[];
+  recheck_due: ProductOut[];
 }
 
 export interface AnalyticsOut {

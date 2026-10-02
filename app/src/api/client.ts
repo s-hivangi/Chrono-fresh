@@ -1,19 +1,28 @@
 import axios from 'axios';
-import { API_BASE_URL } from '../utils/config';
+import { API_BASE_URL, API_CONFIGURATION_ERROR } from '../utils/config';
 
 const client = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL || undefined,
   timeout: 60_000,
+});
+
+client.interceptors.request.use((config) => {
+  // A missing URL is a setup problem, never a request to Metro or localhost.
+  if (API_CONFIGURATION_ERROR) return Promise.reject(new Error(API_CONFIGURATION_ERROR));
+  return config;
 });
 
 client.interceptors.response.use(
   (res) => res,
   (err) => {
+    if (API_CONFIGURATION_ERROR && err?.message === API_CONFIGURATION_ERROR) {
+      return Promise.reject(err);
+    }
     if (!err.response) {
       return Promise.reject(
         new Error(
-          `Cannot reach the ChronoFresh API at ${API_BASE_URL}. ` +
-          'Make sure the backend is running on port 8000 and reachable from this device.',
+          'ChronoFresh could not reach the analysis service. ' +
+          'Please check that the backend is running and try again.',
         ),
       );
     }
@@ -24,4 +33,4 @@ client.interceptors.response.use(
 );
 
 export default client;
-export { API_BASE_URL };
+export { API_BASE_URL, API_CONFIGURATION_ERROR };
