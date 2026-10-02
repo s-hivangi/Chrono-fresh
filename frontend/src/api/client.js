@@ -1,9 +1,10 @@
 import axios from 'axios';
 
+// Empty means same-origin: Vite proxies /api and /uploads to FastAPI.
 const BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_BASE ||
-  'http://127.0.0.1:8000'
+  import.meta.env.VITE_API_BASE_URL ??
+  import.meta.env.VITE_API_BASE ??
+  ''
 ).replace(/\/$/, '');
 
 const client = axios.create({

@@ -1,7 +1,7 @@
 export const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_BASE ||
-  "http://127.0.0.1:8000"
+  import.meta.env.VITE_API_BASE_URL ??
+  import.meta.env.VITE_API_BASE ??
+  ""
 ).replace(/\/$/, '');
 export const PRODUCE_TYPES = ["banana", "guava"];
 export const STAGES = ["Fresh", "Early Ripening", "Mid-Ripening", "Late Ripening", "Spoiled"];
