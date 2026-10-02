@@ -14,6 +14,8 @@ interface ConstantsType {
     debuggerHost?: string;
   };
   executionEnvironment?: string;
+  experienceUrl?: string;
+  __unsafeNoWarnManifest2?: unknown;
 }
 
 declare const Constants: ConstantsType;

@@ -1,7 +1,24 @@
 // Compatibility declarations for untyped internals referenced by Expo SDK 57.
-declare module 'react-native/Libraries/Image/AssetSourceResolver';
+declare module 'react-native/Libraries/Image/AssetSourceResolver' {
+  export default class AssetSourceResolver {
+    constructor(...args: any[]);
+    defaultAsset(): unknown;
+  }
+}
 declare module 'react-native/Libraries/Image/resolveAssetSource';
-declare module '@react-native/assets-registry/registry';
+declare module '@react-native/assets-registry/registry' {
+  export interface PackagerAsset {
+    __packager_asset?: boolean;
+    hash: string;
+    height: number;
+    httpServerLocation: string;
+    name: string;
+    scales: number[];
+    type: string;
+    width: number;
+  }
+  export function getAssetByID(assetId: number): PackagerAsset | undefined;
+}
 declare module 'invariant';
 
 declare module 'expo-font' {
@@ -33,6 +50,8 @@ declare module 'expo-constants' {
     expoConfig?: { version?: string; hostUri?: string };
     /** @deprecated */ expoGoConfig?: { debuggerHost?: string };
     executionEnvironment?: string;
+    experienceUrl?: string;
+    __unsafeNoWarnManifest2?: unknown;
   };
   export default Constants;
 }

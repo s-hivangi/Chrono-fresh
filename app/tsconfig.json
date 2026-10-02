@@ -10,12 +10,12 @@
       "expo-image-picker": ["./types/expo-image-picker.d.ts"],
       "expo-image-manipulator": ["./types/expo-image-manipulator.d.ts"],
       "expo-constants": ["./types/expo-constants.d.ts"],
+      "expo-asset": ["./types/expo-asset.d.ts"],
       "expo-notifications": ["./types/expo-notifications.d.ts"],
+      "expo-symbols": ["./types/expo-symbols.d.ts"],
       "react-native-reanimated": ["./types/react-native-reanimated.d.ts"],
       "expo-router/html": ["./types/expo-router-html.d.ts"],
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
   "include": [
