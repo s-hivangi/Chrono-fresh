@@ -1,106 +1,89 @@
 # Running ChronoFresh locally
 
-ChronoFresh has three local processes: PostgreSQL and the FastAPI backend, the React website, and the Expo mobile app. Start the backend first because both clients call its API.
+Run the backend, website, and mobile app in **three separate terminals**. The phone and computer must be on the same Wi-Fi. No Cloudflare tunnel or launcher script is required.
 
-## Prerequisites
+## 1. Backend
 
-- Python 3.12 (the selected TensorFlow build does not support Python 3.14)
-- PostgreSQL running locally, with a database named `chronofresh`
-- Node.js with npm
-- For Android: Android Studio, an installed Android Virtual Device, and `ANDROID_HOME` configured if the SDK is not in its standard Windows location
+Prerequisites: Python 3.12, PostgreSQL, and a `chronofresh_db` database. Configure `backend/.env` from `backend/.env.example`. Keep your database password and `ANALYSIS_TOKEN_SECRET` private. The checked-in Keras model files are `backend/models/efficientnetb3_final.keras` and `backend/models/model_metadata.json`; `PREDICTION_PROVIDER=stub` remains available for local development, but the current backend `.env` selects `keras`.
 
-The checked-in model files are required for real inference:
-
-- `backend/models/efficientnetb3_final.keras`
-- `backend/models/model_metadata.json`
-
-## 1. Configure and start the backend
-
-Copy `backend/.env.example` to `backend/.env` and set your PostgreSQL password and a private analysis-token secret.
-
-```env
-DATABASE_URL=postgresql+psycopg2://postgres:YOUR_PASSWORD@localhost:5432/chronofresh
-PREDICTION_PROVIDER=keras
-MODEL_PATH=models/efficientnetb3_final.keras
-MODEL_METADATA_PATH=models/model_metadata.json
-MODEL_CONFIDENCE_THRESHOLD=0.75
-ANALYSIS_TOKEN_SECRET=replace-with-a-long-random-local-secret
-AI_VERIFIER_ENABLED=false
-```
-
-`PREDICTION_PROVIDER=keras` uses the supplied EfficientNetB3 model. `stub` remains available only for local development and automated tests; it does not perform real inference.
+From the repository root in PowerShell:
 
 ```powershell
 cd backend
-uv sync --python 3.12
-uv run --python 3.12 alembic upgrade head
-uv run --python 3.12 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Confirm the API and selected provider in a second PowerShell window:
+If the virtual environment does not exist, create it once before the commands above:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+`0.0.0.0` allows the phone to reach the API; it is not an address to put in the mobile app. On this computer the current Wi-Fi IPv4 address is `192.168.29.142`, so the phone's API URL is `http://192.168.29.142:8000`. If the Wi-Fi address changes, update `app/.env` and restart Expo.
+
+Check the API from the computer, then from the phone's browser:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/health
-Invoke-RestMethod http://127.0.0.1:8000/api/v1/meta
+Invoke-RestMethod http://192.168.29.142:8000/api/v1/health
 ```
 
-The `meta` response should show `prediction_provider: keras` for real inference. FastAPI documentation is at `http://127.0.0.1:8000/docs`.
+The phone browser should open `http://192.168.29.142:8000/api/v1/health`. If the computer check works but the phone check fails, verify both devices are on the same Wi-Fi, disable VPN or guest-network isolation for the test, and allow Python/port 8000 through Windows Firewall on the private network. API docs: `http://127.0.0.1:8000/docs`.
 
-## 2. Start the website
+## 2. Website
+
+In a second terminal:
 
 ```powershell
 cd frontend
 npm ci
-$env:VITE_API_BASE_URL="http://127.0.0.1:8000"
 npm run dev
 ```
 
-Open the URL Vite prints (normally `http://127.0.0.1:5173`). The sidebar shows the provider reported by `/api/v1/meta`; it should say `Keras model` when the real-model backend is running.
+Open `http://localhost:5173` on the computer or `http://192.168.29.142:5173` on the same Wi-Fi. `frontend/.env` leaves `VITE_API_BASE_URL` empty, so the Vite development server proxies `/api` and `/uploads` to the backend. No browser-side `localhost` API address is needed. Restart Vite after changing its `.env`.
 
-## 3. Start the Android application
+## 3. Android app with Expo Go
 
-For an Android emulator, `10.0.2.2` reaches the host computer’s localhost:
+`app/.env` contains the computer's Wi-Fi API address:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://192.168.29.142:8000
+```
+
+In a third terminal:
 
 ```powershell
 cd app
 npm ci
-$env:EXPO_PUBLIC_API_BASE_URL="http://10.0.2.2:8000"
-npm run android
+npm start
 ```
 
-For a physical phone, replace `10.0.2.2` with your computer’s LAN IP, for example `http://192.168.1.25:8000`. Keep both devices on the same Wi-Fi network and allow port 8000 through Windows Firewall if prompted.
+Open the QR code in an SDK 57-compatible Expo Go on the phone. For an emulator, start it in Android Studio first, then press `a` in the Expo terminal (or use `npm run android`). The app uses LAN mode; the phone and computer must share Wi-Fi. Expo embeds `EXPO_PUBLIC_API_BASE_URL` in the bundle, so restart Expo after editing `app/.env`. Never put secrets in an `EXPO_PUBLIC_*` variable.
 
-`npm run android` starts ADB, boots the first installed Android Virtual Device, then starts Expo. This is sufficient for an emulator or demo-APK workflow; Play Store publishing is not required.
+If the shell opens but analysis fails, first open the backend health URL in the phone browser, then use the app's Settings → Test Connection. If the QR code fails to load, check the phone's Expo Go SDK version and whether the phone can reach the computer on the local network. Do not use `127.0.0.1` or `localhost` in `app/.env`: on a phone those refer to the phone itself. A blank or invalid URL produces an in-app setup message rather than crashing during module import.
 
-## Validation commands
+## Current verification (2 October 2026)
+
+- PostgreSQL connection succeeds; database migration is at head (`20260921_0003`). The configured Keras provider loads successfully.
+- Backend tests: 34 passed, 1 optional model smoke test skipped. Use a workspace-local pytest temp directory on this Windows setup because the global temp directory may deny access.
+- Android JavaScript export, TypeScript check, Expo dependency check, and Expo Doctor passed in the preceding investigation. A local native development build failed during CMake configuration before installation; that is a separate toolchain issue and does **not** prove an app runtime crash.
+- Physical-phone launch and complete scan/save flow are not yet verified. The user will rerun the app and report what happens.
+
+## Validation
 
 ```powershell
-# Backend API, migrations, and artifact-integrity tests
 cd backend
-uv run --python 3.12 pytest -q
+.\.venv\Scripts\python.exe -m pytest -q --basetemp=.pytest-run-local
 
-# Real Keras load plus one inference smoke test (slower)
-$env:RUN_MODEL_SMOKE="1"
-uv run --python 3.12 pytest -q tests/test_prediction_service.py -k actual_keras_artifact_loads
-
-# Website production build
 cd ..\frontend
 npm run build
 
-# Mobile TypeScript check and Expo SDK compatibility
 cd ..\app
 npx tsc --noEmit
+npx expo install --check
 npx expo-doctor
 ```
 
-The real-model smoke test loads the `.keras` artifact and runs one local image through the Keras provider. It does not create database records or start a server.
-
-## Model evaluation (optional)
-
-```powershell
-cd backend
-uv run --python 3.12 python scripts/evaluate_model.py
-uv run --python 3.12 python scripts/evaluate_model.py --dataset path\to\labelled_test --csv results\predictions.csv --json results\evaluation.json
-```
-
-ChronoFresh predictions are quality estimates, not food-safety diagnoses. Always check smell, texture, visible damage, and normal food-safety guidance.
+ChronoFresh predictions estimate visible quality, not food safety. Always check smell, texture, and visible damage.

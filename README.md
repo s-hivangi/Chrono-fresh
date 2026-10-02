@@ -14,3 +14,7 @@ The teammate reported about 91% training accuracy and 41% testing accuracy. Raw 
 - `docs/` — API, architecture, model handoff and demo notes
 
 See [RUNNING.md](RUNNING.md) for exact setup and commands.
+
+## Physical-phone demo workflow
+
+Run FastAPI on `0.0.0.0:8000`, set `app/.env` to your computer's Wi-Fi IPv4 address, and run `npm start` in `app/`. Open the QR code in Expo Go while the phone and computer share Wi-Fi. The website runs separately with `npm run dev` in `frontend/`. See [RUNNING.md](RUNNING.md) for the exact commands and connection checks.
