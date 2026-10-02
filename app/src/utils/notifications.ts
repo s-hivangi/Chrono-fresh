@@ -1,15 +1,41 @@
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { PermissionStatus } from 'expo-notifications';
+
+const REMINDER_STORAGE_KEY = '@chronofresh/produce-reminders';
+
+type ReminderIds = Record<string, string>;
+export type ProduceReminder = {
+  productId: number;
+  name: string;
+  dueAt?: string | null;
+  stage?: string | null;
+};
 
 export const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
-// Lazy-load expo-notifications so it doesn't crash in Expo Go
+// Lazy-load the native module so an unsupported runtime degrades gracefully.
+// Local scheduled notifications work in Expo Go; only remote push delivery
+// requires a development/production build on recent Android SDKs.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getNotifications(): Promise<any | null> {
-  if (isExpoGo) return null;
-  return import('expo-notifications');
+  try {
+    return await import('expo-notifications');
+  } catch {
+    return null;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureReminderChannel(notifications: any) {
+  if (Platform.OS === 'android') {
+    await notifications.setNotificationChannelAsync('produce-reminders', {
+      name: 'Produce reminders',
+      importance: notifications.AndroidImportance.DEFAULT,
+    });
+  }
 }
 
 export async function notificationStatus(): Promise<PermissionStatus | 'undetermined'> {
@@ -29,33 +55,74 @@ export async function requestNotifications(): Promise<PermissionStatus | 'undete
   if (!notifications) {
     return 'undetermined';
   }
-  if (Platform.OS === 'android') {
-    await notifications.setNotificationChannelAsync('produce-reminders', {
-      name: 'Produce reminders',
-      importance: notifications.AndroidImportance.DEFAULT,
-    });
-  }
+  await ensureReminderChannel(notifications);
   return (await notifications.requestPermissionsAsync()).status as PermissionStatus;
 }
 
-export async function scheduleProduceReminder(name: string, days?: number | null) {
+async function savedReminderIds(): Promise<ReminderIds> {
+  try {
+    return JSON.parse((await AsyncStorage.getItem(REMINDER_STORAGE_KEY)) ?? '{}') as ReminderIds;
+  } catch {
+    return {};
+  }
+}
+
+async function saveReminderIds(reminders: ReminderIds) {
+  await AsyncStorage.setItem(REMINDER_STORAGE_KEY, JSON.stringify(reminders));
+}
+
+/** Cancel a previously scheduled native reminder for one produce item. */
+export async function cancelProduceReminder(productId: number) {
+  const notifications = await getNotifications();
+  const reminders = await savedReminderIds();
+  const identifier = reminders[String(productId)];
+  if (!identifier) return false;
+
+  try {
+    if (notifications) await notifications.cancelScheduledNotificationAsync(identifier);
+  } finally {
+    delete reminders[String(productId)];
+    await saveReminderIds(reminders).catch(() => undefined);
+  }
+  return true;
+}
+
+/**
+ * Schedule one exact recheck reminder for a saved scan.
+ *
+ * A rescan replaces the old reminder. If the estimate has already elapsed,
+ * the Alerts tab surfaces it immediately instead of creating a surprise
+ * notification for an old result.
+ */
+export async function scheduleProduceReminder(reminder: ProduceReminder) {
+  const dueAt = reminder.dueAt ? new Date(reminder.dueAt) : null;
+  if (!dueAt || Number.isNaN(dueAt.getTime()) || dueAt.getTime() <= Date.now()) {
+    await cancelProduceReminder(reminder.productId);
+    return false;
+  }
+
   const notifications = await getNotifications();
   if (!notifications) return false;
 
   const status = await notificationStatus();
   if (status !== 'granted') return false;
 
-  const seconds = Math.max(60, Math.round(Math.min(days ?? 1, 1) * 24 * 60 * 60));
-  await notifications.scheduleNotificationAsync({
+  await ensureReminderChannel(notifications);
+  await cancelProduceReminder(reminder.productId);
+  const identifier = await notifications.scheduleNotificationAsync({
     content: {
-      title: `Check your ${name}`,
-      body: `Your ${name} should be checked today.`,
+      title: `Time to check ${reminder.name}`,
+      body: `Its estimated ${reminder.stage ?? 'current'} shelf-life window has ended. Rescan to confirm its next stage.`,
     },
     trigger: {
-      type: notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-      seconds,
+      type: notifications.SchedulableTriggerInputTypes.DATE,
+      date: dueAt,
       channelId: 'produce-reminders',
     },
   });
+
+  const reminders = await savedReminderIds();
+  reminders[String(reminder.productId)] = identifier;
+  await saveReminderIds(reminders);
   return true;
 }
