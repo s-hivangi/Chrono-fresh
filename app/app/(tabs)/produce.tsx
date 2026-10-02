@@ -25,7 +25,7 @@ export default function ProduceScreen() {
     return (
       <View style={s.center}>
         <OutlineIcon name="warning" color={colors.orange} size={32} />
-        <Text style={s.error}>Could not load your produce right now. Pull down to try again.</Text>
+        <Text style={s.error}>{query.error?.message ?? 'Could not load your produce right now.'}</Text>
         <TouchableOpacity style={s.retryBtn} onPress={() => query.refetch()}>
           <Text style={s.retryText}>Try Again</Text>
         </TouchableOpacity>

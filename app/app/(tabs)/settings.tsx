@@ -4,11 +4,12 @@ import {
 } from 'react-native';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { isExpoGo, notificationStatus, requestNotifications } from '../../src/utils/notifications';
+import { notificationStatus, requestNotifications } from '../../src/utils/notifications';
 import { useAuth } from '../../src/context/AuthContext';
 import { useAppTheme, type ThemeMode } from '../../src/context/ThemeContext';
 import { SPACING, SHADOWS } from '../../src/theme';
 import OutlineIcon, { type OutlineIconName } from '../../src/components/OutlineIcon';
+import client, { API_BASE_URL, API_CONFIGURATION_ERROR } from '../../src/api/client';
 
 function friendlyNotificationStatus(status: string): string {
   switch (status) {
@@ -32,6 +33,7 @@ export default function SettingsScreen() {
   const { colors, mode, setMode } = useAppTheme();
   const { isGuest, userEmail, signOut } = useAuth();
   const [notifStatus, setNotifStatus] = useState('checking');
+  const [backendStatus, setBackendStatus] = useState<'unchecked' | 'checking' | 'connected' | 'unavailable'>('unchecked');
 
   useEffect(() => {
     notificationStatus().then(setNotifStatus).catch(() => setNotifStatus('unavailable'));
@@ -40,6 +42,17 @@ export default function SettingsScreen() {
   async function enableNotifications() {
     const result = await requestNotifications();
     setNotifStatus(result);
+  }
+
+  async function testBackendConnection() {
+    if (API_CONFIGURATION_ERROR) return;
+    setBackendStatus('checking');
+    try {
+      await client.get('/api/v1/health');
+      setBackendStatus('connected');
+    } catch {
+      setBackendStatus('unavailable');
+    }
   }
 
   // Dynamic styles derived from current theme colors
@@ -69,6 +82,28 @@ export default function SettingsScreen() {
             );
           })}
         </View>
+      </View>
+
+      {/* ── Analysis service ── */}
+      <View style={s.card}>
+        <Text style={s.cardLabel}>Analysis Service</Text>
+        <Text style={s.cardValue}>
+          Backend status: {API_CONFIGURATION_ERROR ? 'Setup needed' : backendStatus === 'connected' ? 'Connected' : backendStatus === 'unavailable' ? 'Unavailable' : backendStatus === 'checking' ? 'Checking…' : 'Not checked'}
+        </Text>
+        {API_CONFIGURATION_ERROR ? (
+          <Text style={s.note}>{API_CONFIGURATION_ERROR}</Text>
+        ) : (
+          <Text style={s.urlText} numberOfLines={2}>{API_BASE_URL}</Text>
+        )}
+        <TouchableOpacity
+          style={[s.actionBtn, (backendStatus === 'checking' || Boolean(API_CONFIGURATION_ERROR)) && s.actionBtnDisabled]}
+          onPress={testBackendConnection}
+          disabled={backendStatus === 'checking' || Boolean(API_CONFIGURATION_ERROR)}
+          accessibilityRole="button"
+          accessibilityLabel="Test analysis service connection"
+        >
+          <Text style={s.actionBtnText}>{backendStatus === 'checking' ? 'Testing…' : 'Test Connection'}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Account ── */}
@@ -105,12 +140,7 @@ export default function SettingsScreen() {
       <View style={s.card}>
         <Text style={s.cardLabel}>Reminders</Text>
         <Text style={s.cardValue}>{friendlyNotificationStatus(notifStatus)}</Text>
-        {isExpoGo && (
-          <Text style={s.note}>
-            Reminders require a development or production build — they cannot be tested in Expo Go.
-          </Text>
-        )}
-        {!isExpoGo && notifStatus !== 'granted' && notifStatus !== 'checking' && (
+        {notifStatus !== 'granted' && notifStatus !== 'checking' && (
           <TouchableOpacity
             style={s.actionBtn}
             onPress={enableNotifications}
@@ -175,6 +205,11 @@ function makeStyles(colors: any) {
       lineHeight: 18,
       marginTop: SPACING.sm,
     },
+    urlText: {
+      fontSize: 12,
+      color: colors.muted,
+      marginTop: SPACING.xs,
+    },
     disclaimer: {
       fontSize: 12,
       color: colors.muted,
@@ -217,6 +252,7 @@ function makeStyles(colors: any) {
       alignItems: 'center' as const,
     },
     actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    actionBtnDisabled: { opacity: 0.65 },
     actionBtnOutline: {
       backgroundColor: colors.surface,
       borderWidth: 1.5,

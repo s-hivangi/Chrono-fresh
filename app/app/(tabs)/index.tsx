@@ -10,11 +10,12 @@ import { useAppTheme } from '../../src/context/ThemeContext';
 import ProduceCard from '../../src/components/ProduceCard';
 import OutlineIcon from '../../src/components/OutlineIcon';
 import { formatDays } from '../../src/utils/helpers';
+import { API_CONFIGURATION_ERROR } from '../../src/api/client';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
-  const { data, isLoading, isError, refetch, isFetching } = useDashboard();
+  const { data, isLoading, isError, error, refetch, isFetching } = useDashboard();
   const s = makeStyles(colors);
 
   if (isLoading) {
@@ -31,10 +32,13 @@ export default function HomeScreen() {
       <View style={s.center}>
         <OutlineIcon name="warning" color={colors.orange} size={32} />
         <Text style={s.errorText}>
-          Could not connect to the app right now. Make sure you are on the same network as the server, then try again.
+          {API_CONFIGURATION_ERROR ?? error?.message ?? 'Could not connect to the analysis service right now.'}
         </Text>
-        <TouchableOpacity style={s.retryBtn} onPress={() => refetch()}>
-          <Text style={s.retryText}>Try Again</Text>
+        <TouchableOpacity
+          style={s.retryBtn}
+          onPress={() => API_CONFIGURATION_ERROR ? router.push('/(tabs)/settings' as any) : void refetch()}
+        >
+          <Text style={s.retryText}>{API_CONFIGURATION_ERROR ? 'View Setup' : 'Try Again'}</Text>
         </TouchableOpacity>
       </View>
     );

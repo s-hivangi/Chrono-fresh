@@ -8,6 +8,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRescanMutation } from '../../src/api/produce';
+import { scheduleProduceReminder } from '../../src/utils/notifications';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../../src/theme';
 import OutlineIcon from '../../src/components/OutlineIcon';
 
@@ -37,7 +38,13 @@ export default function RescanScreen() {
     const fd = new FormData();
     fd.append('file', { uri: compressed.uri, type: 'image/jpeg', name: 'rescan.jpg' } as any);
     rescanMutation.mutate(fd, {
-      onSuccess: () => {
+      onSuccess: (saved) => {
+        void scheduleProduceReminder({
+          productId: saved.product_id,
+          name: saved.display_name ?? saved.produce_type,
+          dueAt: saved.next_recheck_at,
+          stage: saved.latest_stage,
+        }).catch(() => false);
         Alert.alert('Rescan saved!', 'The freshness timeline has been updated.', [
           { text: 'OK', onPress: () => router.back() },
         ]);

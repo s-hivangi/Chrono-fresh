@@ -40,7 +40,7 @@ export default function HistoryScreen() {
           <View style={s.emptyState}>
             <OutlineIcon name="warning" color={colors.orange} size={40} />
             <Text style={s.emptyTitle}>Could not load history</Text>
-            <Text style={s.emptyBody}>Check your connection and pull down to try again.</Text>
+            <Text style={s.emptyBody}>{query.error?.message ?? 'Check your connection and pull down to try again.'}</Text>
           </View>
         ) : (
           <View style={s.emptyState}>

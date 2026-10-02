@@ -14,12 +14,13 @@ import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../../src/theme';
 import { StageBadge } from '../../src/components/StageBadge';
 import { STAGE_COLORS, STAGE_BG, cap, formatDays, getRecommendation } from '../../src/utils/helpers';
 import { deriveScanId } from '../../src/utils/scanIds';
+import { cancelProduceReminder } from '../../src/utils/notifications';
 import OutlineIcon from '../../src/components/OutlineIcon';
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { data: produce, isLoading, isError } = useProduceById(id);
+  const { data: produce, isLoading, isError, error } = useProduceById(id);
   const { data: history = [] } = useProduceHistory(id);
   const completeMutation = useCompleteMutation(id);
 
@@ -34,7 +35,10 @@ export default function DetailScreen() {
           style: outcome === 'discarded' ? 'destructive' : 'default',
           onPress: () =>
             completeMutation.mutate(outcome, {
-              onSuccess: () => router.replace('/(tabs)' as any),
+              onSuccess: () => {
+                void cancelProduceReminder(Number(id)).catch(() => false);
+                router.replace('/(tabs)' as any);
+              },
               onError: () =>
                 Alert.alert('Something went wrong', 'Could not update this item. Please try again.'),
             }),
@@ -57,7 +61,7 @@ export default function DetailScreen() {
       <View style={styles.center}>
         <OutlineIcon name="warning" color={COLORS.orange} size={36} />
         <Text style={styles.errorText}>
-          Could not load this item. It may have been removed, or there was a connection problem.
+          {error?.message ?? 'Could not load this item. It may have been removed, or there was a connection problem.'}
         </Text>
         <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
           <Text style={styles.retryText}>Go Back</Text>
@@ -78,6 +82,8 @@ export default function DetailScreen() {
 
   // Recommendation generated entirely on the frontend
   const recommendation = getRecommendation(stage, days, produce.produce_type);
+  const recheckDate = produce.next_recheck_at ? new Date(produce.next_recheck_at) : null;
+  const recheckDue = Boolean(recheckDate && !Number.isNaN(recheckDate.getTime()) && recheckDate.getTime() <= Date.now());
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
@@ -147,6 +153,14 @@ export default function DetailScreen() {
         <Text style={styles.adviceLabel}>What to do</Text>
         <Text style={styles.adviceText}>{recommendation}</Text>
       </View>
+
+      {!isCompleted && recheckDate && (
+        <View style={[styles.recheckBox, recheckDue && styles.recheckDueBox]}>
+          <Text style={styles.recheckLabel}>{recheckDue ? 'Recheck due' : 'Next recheck'}</Text>
+          <Text style={styles.recheckDate}>{recheckDue ? 'Rescan this item now to confirm its next stage.' : recheckDate.toLocaleString()}</Text>
+          <Text style={styles.recheckHint}>ChronoFresh will flag this item when its predicted shelf-life window ends.</Text>
+        </View>
+      )}
 
       {/* Actions */}
       {!isCompleted && (
@@ -300,6 +314,11 @@ const styles = StyleSheet.create({
   },
   adviceLabel: { ...TYPOGRAPHY.h3, marginBottom: 8 },
   adviceText: { ...TYPOGRAPHY.body, lineHeight: 22, color: COLORS.text },
+  recheckBox: { backgroundColor: '#eef7e9', borderRadius: 12, padding: SPACING.md, marginBottom: SPACING.md, borderWidth: 1, borderColor: '#b8d8a8' },
+  recheckDueBox: { backgroundColor: '#fff3e5', borderColor: '#f5b86a' },
+  recheckLabel: { ...TYPOGRAPHY.h3, marginBottom: 4, color: COLORS.green },
+  recheckDate: { ...TYPOGRAPHY.body, fontWeight: '700', color: COLORS.text },
+  recheckHint: { ...TYPOGRAPHY.small, marginTop: 6, lineHeight: 18 },
 
   actionsBox: { gap: SPACING.sm, marginBottom: SPACING.md },
   rescanBtn: {

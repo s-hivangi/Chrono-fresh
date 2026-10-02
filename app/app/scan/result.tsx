@@ -82,14 +82,19 @@ export default function ResultScreen() {
       form.append('analysis_token', result.analysis_token);
 
       const saved = await create.mutateAsync(form);
-      await scheduleProduceReminder(session.produceType, result.days_remaining).catch(() => false);
+      await scheduleProduceReminder({
+        productId: saved.product_id,
+        name: saved.display_name ?? session.produceType,
+        dueAt: saved.next_recheck_at,
+        stage: saved.latest_stage,
+      }).catch(() => false);
       session.reset();
       // Navigate to the detail screen so the user can see their full result immediately
       router.replace(`/detail/${saved.product_id}` as any);
-    } catch {
+    } catch (error) {
       Alert.alert(
         'Could not save',
-        'Something went wrong while saving your scan. Please try again.',
+        (error as Error).message || 'Something went wrong while saving your scan. Please try again.',
       );
     }
   }
