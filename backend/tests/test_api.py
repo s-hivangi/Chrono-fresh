@@ -5,6 +5,7 @@ All tests run against an in-memory SQLite database (see conftest.py).
 from __future__ import annotations
 
 import io
+from datetime import datetime
 
 from app.main import _issue_analysis_token
 from app.prediction_service import format_days_remaining, run_dss_engine, uncertain_result
@@ -186,6 +187,27 @@ def test_get_produce_detail(client, tiny_jpeg):
     assert r.json()["product_id"] == pid
 
 
+def test_saved_prediction_exposes_an_exact_recheck_time(client, tiny_jpeg):
+    """A five-day prediction creates a recheck timestamp five days after its scan."""
+    response = client.post(
+        "/api/v1/produce",
+        files=[("file", ("guava.jpg", io.BytesIO(tiny_jpeg), "image/jpeg"))],
+        data={"produce_type": "guava", "analysis_token": _issue_analysis_token({
+            "produce_type": "guava", "freshness_stage": "Fresh",
+            "days_remaining": 5.0, "days_remaining_display": "5.0 days",
+            "confidence": 0.91, "advice": "Test advice",
+            "refrigeration_trigger": False, "fifo_priority": "STANDARD", "action_type": "MONITOR",
+        })},
+    )
+    assert response.status_code == 201
+    product = response.json()
+    assert product["latest_scan_at"] is not None
+    assert product["next_recheck_at"] is not None
+    scan_at = datetime.fromisoformat(product["latest_scan_at"].replace("Z", "+00:00"))
+    recheck_at = datetime.fromisoformat(product["next_recheck_at"].replace("Z", "+00:00"))
+    assert (recheck_at - scan_at).total_seconds() == 5 * 24 * 60 * 60
+
+
 def test_get_produce_not_found(client):
     r = client.get("/api/v1/produce/99999")
     assert r.status_code == 404
@@ -275,6 +297,7 @@ def test_dashboard_aggregates_correctly(client, tiny_jpeg):
     assert isinstance(data["use_first"], list)
     assert isinstance(data["recent_scans"], list)
     assert isinstance(data["all_active"], list)
+    assert isinstance(data["recheck_due"], list)
 
 
 def test_zero_days_sorts_first_and_use_first_excludes_fresh(client, tiny_jpeg):
@@ -290,6 +313,8 @@ def test_zero_days_sorts_first_and_use_first_excludes_fresh(client, tiny_jpeg):
     assert [item["latest_days_remaining"] for item in listed] == [0.0, 2.0, 8.0]
     use_first = client.get("/api/v1/dashboard").json()["use_first"]
     assert [item["product_id"] for item in use_first] == [ids[1]]
+    recheck_due = client.get("/api/v1/dashboard").json()["recheck_due"]
+    assert [item["product_id"] for item in recheck_due] == [ids[1]]
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────
