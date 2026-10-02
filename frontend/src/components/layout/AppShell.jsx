@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Sidebar from './Sidebar.jsx';
 import OutlineIcon from '../shared/OutlineIcon.jsx';
 
-export default function AppShell({ children }) {
+export default function AppShell({ children, onLogout }) {
   const [dark, setDark] = useState(() => localStorage.getItem('chronofresh-theme') !== 'light');
 
   useEffect(() => {
@@ -16,6 +16,7 @@ export default function AppShell({ children }) {
       <Sidebar />
       <main className="app-main">
         <div className="app-toolbar">
+          <button type="button" className="theme-toggle" onClick={onLogout} aria-label="Sign out" title="Sign out">Sign out</button>
           <button
             type="button"
             className="theme-toggle"

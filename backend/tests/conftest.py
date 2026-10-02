@@ -58,6 +58,17 @@ def reset_db():
 
 @pytest.fixture()
 def client():
+    instance = TestClient(app)
+    response = instance.post("/api/v1/auth/register", json={
+        "email": "existing-tests@example.com", "password": "test-password-123",
+    })
+    assert response.status_code == 201, response.text
+    instance.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
+    return instance
+
+
+@pytest.fixture()
+def guest_client():
     return TestClient(app)
 
 

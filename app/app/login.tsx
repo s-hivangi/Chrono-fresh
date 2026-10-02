@@ -4,15 +4,19 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../src/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { login, register } = useAuth();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const [mode, setMode] = useState<'register' | 'login'>('register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -20,7 +24,8 @@ export default function LoginScreen() {
     const trimmed = email.trim();
     if (!trimmed) return 'Please enter your email address.';
     if (!trimmed.includes('@')) return 'That does not look like a valid email address.';
-    if (password.length < 6) return 'Password must be at least 6 characters.';
+    if (password.length < 8) return 'Password must be at least 8 characters.';
+    if (mode === 'register' && password !== confirmPassword) return 'Passwords do not match.';
     return null;
   }
 
@@ -33,11 +38,15 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    // Stub: simulate a short network delay then sign in
-    await new Promise((res) => setTimeout(res, 800));
-    signIn(email.trim());
-    setIsLoading(false);
-    router.replace('/(tabs)');
+    try {
+      if (mode === 'register') await register(email.trim(), password);
+      else await login(email.trim(), password);
+      router.replace(returnTo === '/scan/result' ? '/scan/result' : '/(tabs)');
+    } catch (cause) {
+      setError((cause as Error).message || 'Could not sign in. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -62,9 +71,9 @@ export default function LoginScreen() {
 
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.title}>{mode === 'register' ? 'Create Account' : 'Sign In'}</Text>
             <Text style={styles.subtitle}>
-              Save your scan history and get reminders across devices.
+              Save your scan history and keep it private to your account.
             </Text>
           </View>
 
@@ -91,12 +100,29 @@ export default function LoginScreen() {
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
-                placeholder="At least 6 characters"
+                secureTextEntry={!showPassword}
+                placeholder="At least 8 characters"
                 placeholderTextColor={COLORS.muted}
                 accessibilityLabel="Password"
               />
             </View>
+
+            {mode === 'register' && <View style={styles.fieldGroup}>
+              <Text style={styles.label}>Confirm password</Text>
+              <TextInput
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showPassword}
+                placeholder="Repeat your password"
+                placeholderTextColor={COLORS.muted}
+                accessibilityLabel="Confirm password"
+              />
+            </View>}
+
+            <TouchableOpacity onPress={() => setShowPassword((visible) => !visible)} accessibilityRole="button">
+              <Text style={styles.backText}>{showPassword ? 'Hide password' : 'Show password'}</Text>
+            </TouchableOpacity>
 
             {error && (
               <View style={styles.errorBox}>
@@ -109,20 +135,21 @@ export default function LoginScreen() {
               onPress={handleSubmit}
               disabled={isLoading}
               accessibilityRole="button"
-              accessibilityLabel="Create account"
+              accessibilityLabel={mode === 'register' ? 'Create account' : 'Sign in'}
             >
               {isLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.submitBtnText}>Create Account</Text>
+                <Text style={styles.submitBtnText}>{mode === 'register' ? 'Create Account' : 'Sign In'}</Text>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* Disclaimer */}
-          <Text style={styles.disclaimer}>
-            This is a demonstration app. Your data stays on your device.
-          </Text>
+          <TouchableOpacity onPress={() => { setMode(mode === 'register' ? 'login' : 'register'); setError(null); }}>
+            <Text style={styles.disclaimer}>
+              {mode === 'register' ? 'Already have an account? Sign in' : 'New here? Create an account'}
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

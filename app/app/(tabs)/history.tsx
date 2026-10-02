@@ -1,19 +1,24 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   FlatList, Image, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useGlobalHistory } from '../../src/api/produce';
 import { API_BASE_URL } from '../../src/api/client';
 import { SPACING, SHADOWS } from '../../src/theme';
 import { useAppTheme } from '../../src/context/ThemeContext';
 import { STAGE_COLORS, STAGE_BG } from '../../src/utils/helpers';
 import OutlineIcon from '../../src/components/OutlineIcon';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function HistoryScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
+  const { isLoggedIn } = useAuth();
   const query = useGlobalHistory();
+  useFocusEffect(useCallback(() => {
+    if (isLoggedIn) void query.refetch();
+  }, [isLoggedIn, query.refetch]));
   const data = query.data ?? [];
   const s = makeStyles(colors);
 
@@ -32,11 +37,20 @@ export default function HistoryScreen() {
       contentContainerStyle={[s.content, data.length === 0 && s.contentEmpty]}
       data={data}
       keyExtractor={(item) => String(item.image_id)}
-      refreshing={query.isFetching}
-      onRefresh={query.refetch}
+      refreshing={isLoggedIn && query.isFetching}
+      onRefresh={() => { if (isLoggedIn) void query.refetch(); }}
       ListHeaderComponent={<Text style={s.title}>Scan History</Text>}
       ListEmptyComponent={
-        query.isError ? (
+        !isLoggedIn ? (
+          <View style={s.emptyState}>
+            <OutlineIcon name="scan" color={colors.muted} size={40} />
+            <Text style={s.emptyTitle}>Sign in to see your scans</Text>
+            <Text style={s.emptyBody}>Guest analyses are not saved. Create an account to keep a private scan history.</Text>
+            <TouchableOpacity style={s.scanBtn} onPress={() => router.push('/login')} accessibilityRole="button">
+              <Text style={s.scanBtnText}>Sign In or Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        ) : query.isError ? (
           <View style={s.emptyState}>
             <OutlineIcon name="warning" color={colors.orange} size={40} />
             <Text style={s.emptyTitle}>Could not load history</Text>

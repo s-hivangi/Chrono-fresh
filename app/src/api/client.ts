@@ -1,5 +1,6 @@
-import axios from 'axios';
+import axios, { type InternalAxiosRequestConfig } from 'axios';
 import { API_BASE_URL, API_CONFIGURATION_ERROR } from '../utils/config';
+import { currentAccessToken, refreshAccessToken } from './authSession';
 
 const client = axios.create({
   baseURL: API_BASE_URL || undefined,
@@ -9,12 +10,28 @@ const client = axios.create({
 client.interceptors.request.use((config) => {
   // A missing URL is a setup problem, never a request to Metro or localhost.
   if (API_CONFIGURATION_ERROR) return Promise.reject(new Error(API_CONFIGURATION_ERROR));
+  const token = currentAccessToken();
+  if (token) config.headers.set('Authorization', `Bearer ${token}`);
   return config;
 });
 
 client.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    const request = err.config as (InternalAxiosRequestConfig & { _authRetried?: boolean }) | undefined;
+    if (err.response?.status === 401 && request && !request._authRetried &&
+        !request.url?.startsWith('/api/v1/auth/')) {
+      request._authRetried = true;
+      try {
+        const token = await refreshAccessToken();
+        if (token) {
+          request.headers.set('Authorization', `Bearer ${token}`);
+          return client(request);
+        }
+      } catch {
+        // Surface the authorization failure below; restoration handles offline state.
+      }
+    }
     if (API_CONFIGURATION_ERROR && err?.message === API_CONFIGURATION_ERROR) {
       return Promise.reject(err);
     }

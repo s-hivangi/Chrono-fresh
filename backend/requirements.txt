@@ -10,6 +10,9 @@ alembic
 keras==3.15.0
 tensorflow-cpu>=2.20,<2.22
 numpy>=1.26
+argon2-cffi>=25.1.0
+PyJWT>=2.15.1
+email-validator>=2.3.0
 httpx
 pytest
 pytest-asyncio

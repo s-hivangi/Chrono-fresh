@@ -9,6 +9,7 @@ import { useCreateProduceMutation } from '../../src/api/produce';
 import { useScanSession } from '../../src/context/ScanSessionContext';
 import { scheduleProduceReminder } from '../../src/utils/notifications';
 import { generateScanId } from '../../src/utils/scanIds';
+import { useAuth } from '../../src/context/AuthContext';
 import { COLORS, SPACING, TYPOGRAPHY, SHADOWS } from '../../src/theme';
 import { STAGE_COLORS, STAGE_BG, formatDays } from '../../src/utils/helpers';
 
@@ -22,6 +23,7 @@ function confidenceIndicator(confidence: number): { label: string; color: string
 export default function ResultScreen() {
   const router = useRouter();
   const session = useScanSession();
+  const { isLoggedIn } = useAuth();
   const create = useCreateProduceMutation();
   const result = session.result;
 
@@ -71,6 +73,13 @@ export default function ResultScreen() {
 
   async function save() {
     if (!session.imageUri || !result) return;
+    if (!isLoggedIn) {
+      Alert.alert('Sign in to save', 'Your analysis is ready. Sign in or create an account to save it to your private history.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign In', onPress: () => router.push({ pathname: '/login', params: { returnTo: '/scan/result' } }) },
+      ]);
+      return;
+    }
     try {
       // Generate a proper scan ID before saving (increments the AsyncStorage counter)
       await generateScanId(result.produce_type);

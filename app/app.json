@@ -12,7 +12,10 @@
     },
     "android": {
       "package": "com.chronofresh.app",
-      "permissions": ["CAMERA", "POST_NOTIFICATIONS"],
+      "permissions": [
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,7 +41,8 @@
       ],
       "expo-image",
       "expo-image-picker",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

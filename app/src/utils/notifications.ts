@@ -17,10 +17,13 @@ export const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 // Lazy-load the native module so an unsupported runtime degrades gracefully.
-// Local scheduled notifications work in Expo Go; only remote push delivery
-// requires a development/production build on recent Android SDKs.
+// This project disables notification scheduling in Expo Go; local reminders
+// require a development or production build on the current Android setup.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getNotifications(): Promise<any | null> {
+  if (isExpoGo) {
+    return null;
+  }
   try {
     return await import('expo-notifications');
   } catch {
@@ -85,6 +88,17 @@ export async function cancelProduceReminder(productId: number) {
     await saveReminderIds(reminders).catch(() => undefined);
   }
   return true;
+}
+
+/** Remove reminder identifiers and cancel scheduled alerts when an account signs out. */
+export async function clearProduceReminders() {
+  const reminders = await savedReminderIds();
+  const notifications = await getNotifications();
+  if (notifications) {
+    await Promise.allSettled(Object.values(reminders).map((identifier) =>
+      notifications.cancelScheduledNotificationAsync(identifier)));
+  }
+  await AsyncStorage.removeItem(REMINDER_STORAGE_KEY).catch(() => undefined);
 }
 
 /**

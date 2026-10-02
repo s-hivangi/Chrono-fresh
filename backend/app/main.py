@@ -14,13 +14,14 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, selectinload
 
 from . import models  # noqa: F401 -- needed so tables are registered on Base
+from .auth import _secret, get_current_user, router as auth_router
 from .database import get_db
 from .image_utils import read_validated_image, save_normalized_image, save_upload_image
-from .models import ImageHistory, Prediction, Product
+from .models import ImageHistory, Prediction, Product, User
 from .prediction_service import ModelInferenceEngine, SUPPORTED_PRODUCE, validate_produce_type
 from .schemas import (
     AnalyzeResult,
@@ -63,6 +64,7 @@ def utcnow() -> datetime:
 
 
 app = FastAPI(title="Chrono-Fresh API", version="1.0.0", lifespan=lifespan)
+app.include_router(auth_router)
 _cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
     "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
@@ -76,7 +78,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+@app.get("/uploads/{filename}", include_in_schema=False)
+def protected_upload(filename: str, e: int, s: str):
+    """Serve only time-limited media links issued in an authorized API response."""
+    if Path(filename).name != filename or e < int(time.time()):
+        raise HTTPException(status_code=404, detail="Image not found")
+    expected = hmac.new(_secret().encode(), f"{filename}:{e}".encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, s):
+        raise HTTPException(status_code=404, detail="Image not found")
+    path = UPLOAD_DIR / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(path)
 
 
 
@@ -91,9 +105,10 @@ def health():
 
 
 @app.post("/products", response_model=ProductOut)
-def create_product(payload: ProductCreate, db: Session = Depends(get_db)):
+def create_product(payload: ProductCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _validate_produce_type(payload.produce_type.strip().lower())
     product = Product(
+        user_id=user.id,
         produce_type=payload.produce_type.strip().lower(),
         variety=payload.variety,
         storage_type=payload.storage_type,
@@ -111,10 +126,11 @@ def list_products(
     status: Optional[str] = None,
     urgent: bool = False,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     query = db.query(Product).options(
         selectinload(Product.images).selectinload(ImageHistory.prediction)
-    )
+    ).filter(Product.user_id == user.id)
     if produce_type:
         query = query.filter(Product.produce_type == produce_type.lower())
     if status:
@@ -132,18 +148,18 @@ def list_products(
 
 
 @app.get("/products/{product_id}", response_model=ProductOut)
-def get_product(product_id: int, db: Session = Depends(get_db)):
-    product = load_product(db, product_id)
+def get_product(product_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    product = load_product(db, product_id, user.id)
     return product_to_out(product)
 
 
 @app.get("/products/{product_id}/history", response_model=list[ImageHistoryOut])
-def get_product_history(product_id: int, db: Session = Depends(get_db)):
-    load_product(db, product_id)
+def get_product_history(product_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    load_product(db, product_id, user.id)
     rows = (
         db.query(ImageHistory)
         .options(selectinload(ImageHistory.prediction))
-        .filter(ImageHistory.product_id == product_id)
+        .filter(ImageHistory.product_id == product_id, ImageHistory.user_id == user.id)
         .order_by(ImageHistory.capture_date.desc())
         .all()
     )
@@ -151,12 +167,12 @@ def get_product_history(product_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/products/{product_id}/timeline", response_model=list[TimelinePoint])
-def get_product_timeline(product_id: int, db: Session = Depends(get_db)):
-    load_product(db, product_id)
+def get_product_timeline(product_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    load_product(db, product_id, user.id)
     rows = (
         db.query(ImageHistory)
         .options(selectinload(ImageHistory.prediction))
-        .filter(ImageHistory.product_id == product_id, ImageHistory.processing_status == "SUCCESS")
+        .filter(ImageHistory.product_id == product_id, ImageHistory.user_id == user.id, ImageHistory.processing_status == "SUCCESS")
         .order_by(ImageHistory.capture_date.asc())
         .all()
     )
@@ -183,10 +199,11 @@ def get_product_timeline(product_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/dashboard/stats", response_model=DashboardStats)
-def get_dashboard_stats(db: Session = Depends(get_db)):
+def get_dashboard_stats(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     products = (
         db.query(Product)
         .options(selectinload(Product.images).selectinload(ImageHistory.prediction))
+        .filter(Product.user_id == user.id)
         .all()
     )
     total_products = len(products)
@@ -218,10 +235,11 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 
 
 @app.get("/dashboard", response_model=list[ProductOut])
-def dashboard(db: Session = Depends(get_db)):
+def dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     products = (
         db.query(Product)
         .options(selectinload(Product.images).selectinload(ImageHistory.prediction))
+        .filter(Product.user_id == user.id)
         .order_by(Product.date_added.desc())
         .all()
     )
@@ -235,11 +253,11 @@ def dashboard(db: Session = Depends(get_db)):
 
 
 @app.get("/history", response_model=list[ImageHistoryOut])
-def global_history(search: Optional[str] = None, db: Session = Depends(get_db)):
+def global_history(search: Optional[str] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     query = db.query(ImageHistory).options(
         selectinload(ImageHistory.prediction),
         selectinload(ImageHistory.product),
-    )
+    ).filter(ImageHistory.user_id == user.id)
     if search:
         pattern = f"%{search.lower()}%"
         query = query.join(Product).filter(Product.produce_type.ilike(pattern))
@@ -253,6 +271,7 @@ async def predict_single(
     product_id: Annotated[Optional[int], Form()] = None,
     storage_type: Annotated[Optional[str], Form()] = "room",
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     results = await upload_images(
         files=[file],
@@ -261,6 +280,7 @@ async def predict_single(
         produce_type=produce_type,
         storage_type=storage_type,
         db=db,
+        user=user,
     )
     return results[0]
 
@@ -274,6 +294,7 @@ async def upload_images(
     produce_type: Annotated[Optional[str], Form()] = None,
     storage_type: Annotated[Optional[str], Form()] = "room",
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     if batch_mode not in {"single", "same_fruit", "different_fruits"}:
         raise HTTPException(status_code=400, detail="batch_mode must be single, same_fruit, or different_fruits")
@@ -285,13 +306,14 @@ async def upload_images(
         _validate_produce_type(produce_type or "")
 
     batch_id = uuid4().hex
-    shared_product = load_product(db, product_id) if product_id else None
+    shared_product = load_product(db, product_id, user.id) if product_id else None
     results: list[UploadResult] = []
 
     for index, upload in enumerate(files, start=1):
         product = shared_product
         if product is None:
             product = Product(
+                user_id=user.id,
                 produce_type=(produce_type or "unknown").strip().lower(),
                 storage_type=storage_type,
                 display_name=None if batch_mode == "same_fruit" else f"{produce_type.title()} #{index}",
@@ -302,6 +324,7 @@ async def upload_images(
                 shared_product = product
 
         image_row = ImageHistory(
+            user_id=user.id,
             product_id=product.product_id,
             image_path="pending",
             capture_date=utcnow(),
@@ -381,11 +404,11 @@ async def upload_images(
     return results
 
 
-def load_product(db: Session, product_id: int) -> Product:
+def load_product(db: Session, product_id: int, user_id: int) -> Product:
     product = (
         db.query(Product)
         .options(selectinload(Product.images).selectinload(ImageHistory.prediction))
-        .filter(Product.product_id == product_id)
+        .filter(Product.product_id == product_id, Product.user_id == user_id)
         .first()
     )
     if product is None:
@@ -461,7 +484,9 @@ def path_to_url(path: Optional[str]) -> Optional[str]:
     if not path or path == "pending":
         return None
     name = Path(path).name
-    return f"/uploads/{name}"
+    expires = int(time.time()) + 3600
+    signature = hmac.new(_secret().encode(), f"{name}:{expires}".encode(), hashlib.sha256).hexdigest()
+    return f"/uploads/{name}?e={expires}&s={signature}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -637,6 +662,7 @@ async def v1_create_produce(
     display_name: Annotated[Optional[str], Form()] = None,
     analysis_token: Annotated[Optional[str], Form()] = None,
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Save a produce item with its first scan and prediction."""
     ptype = produce_type.strip().lower()
@@ -654,6 +680,7 @@ async def v1_create_produce(
         if payload.get("analysis_status", "reliable") == "uncertain":
             raise HTTPException(status_code=422, detail="Uncertain analyses cannot be saved as a definite result. Scan again.")
         product = Product(
+            user_id=user.id,
             produce_type=ptype,
             storage_type=storage_type or "room",
             display_name=display_name or f"{produce_type.strip().title()} #{uuid4().hex[:4].upper()}",
@@ -662,6 +689,7 @@ async def v1_create_produce(
         db.add(product)
         db.flush()
         image_row = ImageHistory(
+            user_id=user.id,
             product_id=product.product_id,
             image_path=str(image_path),
             thumbnail_path=str(thumbnail_path),
@@ -720,11 +748,12 @@ def v1_list_produce(
     search: Optional[str] = None,
     sort: Optional[str] = "urgency",
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """List produce. status: active (default) | completed | all."""
     query = db.query(Product).options(
         selectinload(Product.images).selectinload(ImageHistory.prediction)
-    )
+    ).filter(Product.user_id == user.id)
     if status and status != "all":
         if status == "completed":
             query = query.filter(Product.status == "completed")
@@ -750,15 +779,15 @@ def v1_list_produce(
 # ── API 6: Produce detail ──────────────────────────────────────────────────────
 
 @app.get("/api/v1/produce/{product_id}", response_model=ProductOut, tags=["v1"])
-def v1_get_produce(product_id: int, db: Session = Depends(get_db)):
-    return product_to_out(load_product(db, product_id))
+def v1_get_produce(product_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return product_to_out(load_product(db, product_id, user.id))
 
 
 # ── API 7: Update produce ──────────────────────────────────────────────────────
 
 @app.patch("/api/v1/produce/{product_id}", response_model=ProductOut, tags=["v1"])
-def v1_update_produce(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db)):
-    product = load_product(db, product_id)
+def v1_update_produce(product_id: int, payload: ProductUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    product = load_product(db, product_id, user.id)
     if payload.display_name is not None:
         product.display_name = payload.display_name.strip() or product.display_name
     if payload.storage_type is not None:
@@ -775,15 +804,17 @@ async def v1_rescan_produce(
     product_id: int,
     file: Annotated[UploadFile, File()],
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Upload a new image for an existing produce item. Adds a new scan without replacing history."""
-    product = load_product(db, product_id)
+    product = load_product(db, product_id, user.id)
     normalized = await read_validated_image(file, _MAX_UPLOAD_MB)
     image_path: Optional[Path] = None
     thumbnail_path: Optional[Path] = None
     try:
         image_path, thumbnail_path = save_normalized_image(normalized, UPLOAD_DIR)
         image_row = ImageHistory(
+            user_id=user.id,
             product_id=product.product_id,
             image_path=str(image_path),
             thumbnail_path=str(thumbnail_path),
@@ -843,12 +874,12 @@ async def v1_rescan_produce(
 # ── API 9: Scan history ────────────────────────────────────────────────────────
 
 @app.get("/api/v1/produce/{product_id}/history", response_model=list[ImageHistoryOut], tags=["v1"])
-def v1_produce_history(product_id: int, db: Session = Depends(get_db)):
-    load_product(db, product_id)
+def v1_produce_history(product_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    load_product(db, product_id, user.id)
     rows = (
         db.query(ImageHistory)
         .options(selectinload(ImageHistory.prediction))
-        .filter(ImageHistory.product_id == product_id)
+        .filter(ImageHistory.product_id == product_id, ImageHistory.user_id == user.id)
         .order_by(ImageHistory.capture_date.desc())
         .all()
     )
@@ -858,12 +889,12 @@ def v1_produce_history(product_id: int, db: Session = Depends(get_db)):
 # ── API 10: Timeline ───────────────────────────────────────────────────────────
 
 @app.get("/api/v1/produce/{product_id}/timeline", response_model=list[TimelinePoint], tags=["v1"])
-def v1_produce_timeline(product_id: int, db: Session = Depends(get_db)):
-    load_product(db, product_id)
+def v1_produce_timeline(product_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    load_product(db, product_id, user.id)
     rows = (
         db.query(ImageHistory)
         .options(selectinload(ImageHistory.prediction))
-        .filter(ImageHistory.product_id == product_id, ImageHistory.processing_status == "SUCCESS")
+        .filter(ImageHistory.product_id == product_id, ImageHistory.user_id == user.id, ImageHistory.processing_status == "SUCCESS")
         .order_by(ImageHistory.capture_date.asc())
         .all()
     )
@@ -889,9 +920,9 @@ def v1_produce_timeline(product_id: int, db: Session = Depends(get_db)):
 # ── API 11: Complete produce ───────────────────────────────────────────────────
 
 @app.post("/api/v1/produce/{product_id}/complete", response_model=ProductOut, tags=["v1"])
-def v1_complete_produce(product_id: int, payload: CompleteRequest, db: Session = Depends(get_db)):
+def v1_complete_produce(product_id: int, payload: CompleteRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Mark a produce item as consumed or discarded. Preserves all history."""
-    product = load_product(db, product_id)
+    product = load_product(db, product_id, user.id)
     if product.status == "completed":
         raise HTTPException(status_code=409, detail="This produce item is already completed.")
     product.status = "completed"
@@ -905,11 +936,12 @@ def v1_complete_produce(product_id: int, payload: CompleteRequest, db: Session =
 # ── API 12: Dashboard v1 ──────────────────────────────────────────────────────
 
 @app.get("/api/v1/dashboard", response_model=DashboardV1Out, tags=["v1"])
-def v1_dashboard(db: Session = Depends(get_db)):
+def v1_dashboard(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Combined dashboard: stats + priority items + recent scans."""
     all_products = (
         db.query(Product)
         .options(selectinload(Product.images).selectinload(ImageHistory.prediction))
+        .filter(Product.user_id == user.id)
         .all()
     )
     active = [product_to_out(p) for p in all_products if p.status != "completed"]
@@ -927,6 +959,7 @@ def v1_dashboard(db: Session = Depends(get_db)):
             selectinload(ImageHistory.prediction),
             selectinload(ImageHistory.product),
         )
+        .filter(ImageHistory.user_id == user.id)
         .order_by(ImageHistory.capture_date.desc())
         .limit(5)
         .all()
@@ -949,11 +982,12 @@ def v1_dashboard(db: Session = Depends(get_db)):
 # ── API 13: Analytics ─────────────────────────────────────────────────────────
 
 @app.get("/api/v1/analytics", response_model=AnalyticsOut, tags=["v1"])
-def v1_analytics(db: Session = Depends(get_db)):
+def v1_analytics(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Aggregated analytics for the Analytics page."""
     all_products = (
         db.query(Product)
         .options(selectinload(Product.images).selectinload(ImageHistory.prediction))
+        .filter(Product.user_id == user.id)
         .all()
     )
     active = [p for p in all_products if p.status != "completed"]
@@ -963,7 +997,7 @@ def v1_analytics(db: Session = Depends(get_db)):
 
     all_images = (
         db.query(ImageHistory)
-        .filter(ImageHistory.processing_status == "SUCCESS")
+        .filter(ImageHistory.user_id == user.id, ImageHistory.processing_status == "SUCCESS")
         .all()
     )
 

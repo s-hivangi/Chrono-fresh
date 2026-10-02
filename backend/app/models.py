@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, TIMESTAMP, Boolean
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, TIMESTAMP, Boolean, true
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -8,6 +8,7 @@ class Product(Base):
     __tablename__ = "products"
 
     product_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True)
     produce_type = Column(String(50), nullable=False)      # active scans: banana or guava
     variety = Column(String(100))
     date_added = Column(TIMESTAMP, server_default=func.now())
@@ -18,12 +19,14 @@ class Product(Base):
     display_name = Column(String(100))
 
     images = relationship("ImageHistory", back_populates="product", cascade="all, delete")
+    owner = relationship("User", back_populates="products")
 
 
 class ImageHistory(Base):
     __tablename__ = "image_history"
 
     image_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True)
     product_id = Column(Integer, ForeignKey("products.product_id", ondelete="CASCADE"), nullable=False)
     image_path = Column(String, nullable=False)
     thumbnail_path = Column(String)
@@ -40,6 +43,35 @@ class ImageHistory(Base):
 
     product = relationship("Product", back_populates="images")
     prediction = relationship("Prediction", back_populates="image", uselist=False, cascade="all, delete")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(320), nullable=False)
+    normalized_email = Column(String(320), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, nullable=False, server_default=true())
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    updated_at = Column(TIMESTAMP, nullable=False, server_default=func.now(), onupdate=func.now())
+
+    products = relationship("Product", back_populates="owner")
+    refresh_sessions = relationship("RefreshSession", back_populates="user")
+
+
+class RefreshSession(Base):
+    __tablename__ = "refresh_sessions"
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    refresh_token_hash = Column(String(64), nullable=False, unique=True)
+    created_at = Column(TIMESTAMP, nullable=False, server_default=func.now())
+    expires_at = Column(TIMESTAMP, nullable=False)
+    revoked_at = Column(TIMESTAMP)
+    replaced_by_session_id = Column(String(36))
+
+    user = relationship("User", back_populates="refresh_sessions")
 
 
 class Prediction(Base):

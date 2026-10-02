@@ -10,4 +10,5 @@ declare module 'expo-router' {
     back(): void;
   };
   export function useLocalSearchParams<T extends object = Record<string, string>>(): T;
+  export function useFocusEffect(effect: () => void | (() => void)): void;
 }

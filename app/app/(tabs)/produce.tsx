@@ -6,10 +6,12 @@ import ProduceCard from '../../src/components/ProduceCard';
 import { SPACING } from '../../src/theme';
 import { useAppTheme } from '../../src/context/ThemeContext';
 import OutlineIcon from '../../src/components/OutlineIcon';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function ProduceScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
+  const { isLoggedIn } = useAuth();
   const query = useListProduce('active');
   const s = makeStyles(colors);
 
@@ -39,16 +41,19 @@ export default function ProduceScreen() {
       contentContainerStyle={[s.content, (query.data ?? []).length === 0 && s.contentEmpty]}
       data={query.data ?? []}
       keyExtractor={(item) => String(item.product_id)}
-      refreshing={query.isFetching}
-      onRefresh={query.refetch}
+      refreshing={isLoggedIn && query.isFetching}
+      onRefresh={() => { if (isLoggedIn) void query.refetch(); }}
       ListHeaderComponent={<Text style={s.title}>Your Stash</Text>}
       ListEmptyComponent={
         <View style={s.emptyState}>
           <OutlineIcon name="produce" color={colors.muted} size={48} />
           <Text style={s.emptyTitle}>Nothing tracked yet</Text>
           <Text style={s.emptyBody}>
-            Scan a piece of produce from the Scan tab and it will appear here.
+            {isLoggedIn ? 'Scan a piece of produce from the Scan tab and it will appear here.' : 'Sign in to save and track your produce. You can still scan as a guest.'}
           </Text>
+          {!isLoggedIn && <TouchableOpacity style={s.retryBtn} onPress={() => router.push('/login')} accessibilityRole="button">
+            <Text style={s.retryText}>Sign In or Create Account</Text>
+          </TouchableOpacity>}
         </View>
       }
       renderItem={({ item }) => (
